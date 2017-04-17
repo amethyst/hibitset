@@ -1,0 +1,8 @@
+# Rust-specific files
+Cargo.lock
+target/
+
+# IDE / Editor files
+*.bk
+*.iml
+.idea
