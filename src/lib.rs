@@ -61,23 +61,20 @@ impl BitSet {
 
     #[inline(never)]
     fn extend(&mut self, id: Index) {
-        use std::iter::repeat;
-
         Self::valid_range(id);
         let (p0, p1, p2) = offsets(id);
 
-        if self.layer2.len() <= p2 {
-            let count = p2 - self.layer2.len() + 1;
-            self.layer2.extend(repeat(0).take(count));
+        Self::fill_up(&mut self.layer2, p2);
+        Self::fill_up(&mut self.layer1, p1);
+        Self::fill_up(&mut self.layer0, p0);
+    }
+
+    fn fill_up(vec: &mut Vec<usize>, to: usize) {
+        if vec.len() > to {
+            return;
         }
-        if self.layer1.len() <= p1 {
-            let count = p1 - self.layer1.len() + 1;
-            self.layer1.extend(repeat(0).take(count));
-        }
-        if self.layer0.len() <= p0 {
-            let count = p0 - self.layer0.len() + 1;
-            self.layer0.extend(repeat(0).take(count));
-        }
+
+        vec.resize(to + 1, 0);
     }
 
     /// This is used to set the levels in the hierarchy
