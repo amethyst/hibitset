@@ -7,6 +7,8 @@
 #![deny(missing_docs)]
 
 extern crate atom;
+#[cfg(feature="parallel")]
+extern crate rayon;
 
 mod atomic;
 mod iter;
@@ -15,6 +17,8 @@ mod util;
 
 pub use atomic::AtomicBitSet;
 pub use iter::BitIter;
+#[cfg(feature="parallel")]
+pub use iter::BitParIter;
 pub use ops::{BitSetAnd, BitSetNot, BitSetOr};
 
 use util::*;
@@ -198,6 +202,14 @@ pub trait BitSetLike {
 
         BitIter::new(self, [0, 0, 0, layer3], [0; 3])
     }
+
+    /// Create a parallel iterator that will scan over the keyspace
+    #[cfg(feature="parallel")]
+    fn par_iter(self) -> BitParIter<Self>
+        where Self: Sized
+    {
+        BitParIter::new(self)
+    }
 }
 
 impl<'a, T> BitSetLike for &'a T
@@ -323,6 +335,27 @@ mod tests {
     }
 
     #[test]
+    fn iter_random_add() {
+        use std::num::Wrapping as Z;
+        let mut set = BitSet::new();
+        let mut state = Z(0u64);
+        let max_added = 1_048_576 / 10;
+        let mut added = 0;
+        for _ in 0..max_added {
+            let oldstate = state;
+            state = oldstate * Z(6364136223846793005) + Z(1);
+            let xorshifted = Z((((oldstate >> 18) ^ oldstate) >> 27).0 as u32);
+            let rot = Z((oldstate >> 59).0 as u32);
+            let out = (xorshifted >> rot.0 as usize) | (xorshifted << ((!rot.0 as usize) & 31));
+            let index = out.0 & (1_048_576 - 1);
+            if !set.add(index) {
+                added += 1;
+            }
+        }
+        assert_eq!(set.iter().count(), added as usize);
+    }
+
+    #[test]
     fn not() {
         let mut c = BitSet::new();
         for i in 0..10_000 {
@@ -334,5 +367,64 @@ mod tests {
         for (idx, i) in d.iter().take(5_000).enumerate() {
             assert_eq!(idx * 2, i as usize);
         }
+    }
+}
+
+#[cfg(all(test, feature="parallel"))]
+mod set_test_parallel {
+    use super::{BitSet, BitSetAnd, BitSetLike};
+    use rayon::iter::ParallelIterator;
+    use std::num::Wrapping as Z;
+
+    #[test]
+    fn par_iter_one() {
+        let step = 5000;
+        let tests = 1_048_576 / step;
+        for n in 0..tests {
+            let n = n * step;
+            let mut set = BitSet::new();
+            set.add(n);
+            assert_eq!(set.par_iter().count(), 1);
+        }
+        let mut set = BitSet::new();
+        set.add(1_048_576 - 1);
+        assert_eq!(set.par_iter().count(), 1);
+    }
+
+    #[test]
+    fn par_iter_random_add() {
+        let mut set = BitSet::new();
+        let mut state = Z(1u64);
+        let max_added = 1_048_576 / 10;
+        let mut added = 0;
+        for _ in 0..max_added {
+            let oldstate = state;
+            state = oldstate * Z(6364136223846793005) + Z(1);
+            let xorshifted = Z((((oldstate >> 18) ^ oldstate) >> 27).0 as u32);
+            let rot = Z((oldstate >> 59).0 as u32);
+            let out = (xorshifted >> rot.0 as usize) | (xorshifted << ((!rot.0 as usize) & 31));
+            let index = out.0 & (1_048_576 - 1);
+            if !set.add(index) {
+                added += 1;
+            }
+        }
+        assert_eq!(set.par_iter().count(), added as usize);
+    }
+
+    #[test]
+    fn par_iter_odd_even() {
+        let mut odd = BitSet::new();
+        let mut even = BitSet::new();
+        for i in 0..100_000 {
+            if i % 2 == 1 {
+                odd.add(i);
+            } else {
+                even.add(i);
+            }
+        }
+
+        assert_eq!((&odd).par_iter().count(), 50_000);
+        assert_eq!((&even).par_iter().count(), 50_000);
+        assert_eq!(BitSetAnd(&odd, &even).par_iter().count(), 0);
     }
 }
