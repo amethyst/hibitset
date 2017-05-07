@@ -9,3 +9,6 @@ script:
   - cargo doc
   - cargo test
   - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then (cargo bench); fi
+env:
+  global:
+    - RUST_BACKTRACE="1"
