@@ -1,16 +1,14 @@
+use std::mem::size_of;
+
 use rayon::iter::ParallelIterator;
 use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
-use super::*;
+
+use iter::{BITS, BitSetLike, BitIter, Index};
 
 /// An `ParallelIterator` over a [`BitSetLike`] structure.
 ///
 /// [`BitSetLike`]: ../../trait.BitSetLike.html
 pub struct BitParIter<T>(T);
-
-#[cfg(target_pointer_width="64")]
-pub const BITS_IN_USIZE: usize = 64;
-#[cfg(target_pointer_width="32")]
-pub const BITS_IN_USIZE: usize = 32;
 
 impl<T> BitParIter<T> {
     /// Creates a new `BitParIter`. You usually don't call this function
@@ -50,7 +48,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
             // Find first bit set
             let first_bit = self.0.masks[3].trailing_zeros();
             // Find last bit set
-            let last_bit = BITS_IN_USIZE as u32 - self.0.masks[3].leading_zeros() - 1;
+            let last_bit = (size_of::<usize>() * 8) as u32 - self.0.masks[3].leading_zeros() - 1;
             // Check that there is more than one bit set
             if first_bit != last_bit {
                 // Make the split point to be the avarage of first and last bit
@@ -76,7 +74,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
             // Find first bit set
             let first_bit = self.0.masks[2].trailing_zeros();
             // Find last bit set
-            let last_bit = BITS_IN_USIZE as u32 - self.0.masks[2].leading_zeros() - 1;
+            let last_bit = (size_of::<usize>() * 8) as u32 as u32 - self.0.masks[2].leading_zeros() - 1;
             // Check that there is more than one bit set
             if first_bit != last_bit {
                 // Make the split point to be the avarage of first and last bit
@@ -102,7 +100,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
             // Find first bit set
             let first_bit = self.0.masks[1].trailing_zeros();
             // Find last bit set
-            let last_bit = BITS_IN_USIZE as u32 - self.0.masks[1].leading_zeros() - 1;
+            let last_bit = (size_of::<usize>() * 8) as u32 as u32 - self.0.masks[1].leading_zeros() - 1;
             // Check that there is more than one bit set
             if first_bit != last_bit {
                 // Make the split point to be the avarage of first and last bit

@@ -9,6 +9,8 @@
 extern crate atom;
 #[cfg(feature="parallel")]
 extern crate rayon;
+#[cfg(test)]
+extern crate rand;
 
 mod atomic;
 mod iter;
@@ -18,9 +20,7 @@ mod util;
 pub use atomic::AtomicBitSet;
 pub use iter::BitIter;
 #[cfg(feature="parallel")]
-pub use iter::BitParIter;
-#[cfg(feature="parallel")]
-pub use iter::BitProducer;
+pub use iter::{BitParIter, BitProducer};
 pub use ops::{BitSetAnd, BitSetNot, BitSetOr};
 
 use util::*;
@@ -338,18 +338,13 @@ mod tests {
 
     #[test]
     fn iter_random_add() {
-        use std::num::Wrapping as Z;
+        use rand::Rng;
         let mut set = BitSet::new();
-        let mut state = Z(0u64);
+        let mut rng = ::rand::weak_rng();
         let max_added = 1_048_576 / 10;
         let mut added = 0;
         for _ in 0..max_added {
-            let oldstate = state;
-            state = oldstate * Z(6364136223846793005) + Z(1);
-            let xorshifted = Z((((oldstate >> 18) ^ oldstate) >> 27).0 as u32);
-            let rot = Z((oldstate >> 59).0 as u32);
-            let out = (xorshifted >> rot.0 as usize) | (xorshifted << ((!rot.0 as usize) & 31));
-            let index = out.0 & (1_048_576 - 1);
+            let index = rng.gen_range(0, max_added);
             if !set.add(index) {
                 added += 1;
             }
@@ -373,10 +368,9 @@ mod tests {
 }
 
 #[cfg(all(test, feature="parallel"))]
-mod set_test_parallel {
+mod test_parallel {
     use super::{BitSet, BitSetAnd, BitSetLike};
     use rayon::iter::ParallelIterator;
-    use std::num::Wrapping as Z;
 
     #[test]
     fn par_iter_one() {
@@ -395,17 +389,13 @@ mod set_test_parallel {
 
     #[test]
     fn par_iter_random_add() {
+        use rand::Rng;
         let mut set = BitSet::new();
-        let mut state = Z(1u64);
+        let mut rng = ::rand::weak_rng();
         let max_added = 1_048_576 / 10;
         let mut added = 0;
         for _ in 0..max_added {
-            let oldstate = state;
-            state = oldstate * Z(6364136223846793005) + Z(1);
-            let xorshifted = Z((((oldstate >> 18) ^ oldstate) >> 27).0 as u32);
-            let rot = Z((oldstate >> 59).0 as u32);
-            let out = (xorshifted >> rot.0 as usize) | (xorshifted << ((!rot.0 as usize) & 31));
-            let index = out.0 & (1_048_576 - 1);
+            let index = rng.gen_range(0, max_added);
             if !set.add(index) {
                 added += 1;
             }

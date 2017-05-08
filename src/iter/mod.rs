@@ -2,9 +2,7 @@ use util::*;
 use BitSetLike;
 
 #[cfg(feature="parallel")]
-pub use self::parallel::BitParIter;
-#[cfg(feature="parallel")]
-pub use self::parallel::BitProducer;
+pub use self::parallel::{BitParIter, BitProducer};
 
 #[cfg(feature="parallel")]
 mod parallel;
