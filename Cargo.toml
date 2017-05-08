@@ -16,6 +16,9 @@ version = "0.7"
 optional = true
 features = ["unstable"]
 
+[dev-dependencies]
+rand = "0.3"
+
 [features]
 default = ["parallel"]
 parallel = ["rayon"]
