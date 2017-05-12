@@ -43,86 +43,52 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
 {
     type Item = Index;
     fn split(mut self) -> (Self, Option<Self>) {
-        // Look at the 4th and highest level
-        if self.0.masks[3] != 0 {
-            // Find first bit set
-            let first_bit = self.0.masks[3].trailing_zeros();
-            // Find last bit set
-            let last_bit = (size_of::<usize>() * 8) as u32 - self.0.masks[3].leading_zeros() - 1;
-            // Check that there is more than one bit set
-            if first_bit != last_bit {
-                // Make the split point to be the avarage of first and last bit
-                let avarage = (first_bit + last_bit) / 2;
-                // Bit mask to get the lower half of the mask
-                let mask = (1 << avarage) - 1;
-                let other = BitProducer(BitIter {
-                    set: self.0.set,
-                    // Take the higher half of the mask
-                    masks: [0, 0, 0, self.0.masks[3] & !mask],
-                    // The higher half starts iterating from the avarage
-                    prefix: [0, 0, avarage << BITS],
-                });
-                // Take the lower half the mask
-                self.0.masks[3] &= mask;
-                // The lower half starts iterating from the first bit
-                self.0.prefix[2] = first_bit << BITS;
-                return (self, Some(other));
-            }
-        }
-        // Look at third level
-        if self.0.masks[2] != 0 {
-            // Find first bit set
-            let first_bit = self.0.masks[2].trailing_zeros();
-            // Find last bit set
-            let last_bit = (size_of::<usize>() * 8) as u32 as u32 - self.0.masks[2].leading_zeros() - 1;
-            // Check that there is more than one bit set
-            if first_bit != last_bit {
-                // Make the split point to be the avarage of first and last bit
-                let avarage = (first_bit + last_bit) / 2;
-                // Bit mask to get the lower half of the mask
-                let mask = (1 << avarage) - 1;
-                let other = BitProducer(BitIter {
-                    set: self.0.set,
-                    // Take the higher half of the mask
-                    masks: [0, 0, self.0.masks[2] & !mask, 0],
-                    // The higher half starts iterating from the avarage
-                    prefix: [0, (self.0.prefix[2] | avarage) << BITS, self.0.prefix[2]],
-                });
-                // Take the lower half the mask
-                self.0.masks[2] &= mask;
-                // The lower half starts iterating from the first bit
-                self.0.prefix[2] = (self.0.prefix[2] | first_bit) << BITS;
-                return (self, Some(other));
-            }
-        }
-        // Look at second level
-        if self.0.masks[1] != 0 {
-            // Find first bit set
-            let first_bit = self.0.masks[1].trailing_zeros();
-            // Find last bit set
-            let last_bit = (size_of::<usize>() * 8) as u32 as u32 - self.0.masks[1].leading_zeros() - 1;
-            // Check that there is more than one bit set
-            if first_bit != last_bit {
-                // Make the split point to be the avarage of first and last bit
-                let avarage = (first_bit + last_bit) / 2;
-                // Bit mask to get the lower half of the mask
-                let mask = (1 << avarage) - 1;
-                let other = BitProducer(BitIter {
-                    set: self.0.set,
-                    // Take the higher half of the mask
-                    masks: [0, self.0.masks[1] & !mask, 0, 0],
-                    // The higher half starts iterating from the avarage
-                    prefix: [(self.0.prefix[1] | avarage) << BITS, self.0.prefix[1], self.0.prefix[2]],
-                });
-                // Take the lower half the mask
-                self.0.masks[1] &= mask;
-                // The lower half starts iterating from the first bit
-                self.0.prefix[0] = (self.0.prefix[1] | first_bit) << BITS;
-                return (self, Some(other));
-            }
-        }
-        // No more splitting
-        (self, None)
+        let other = {
+            let mut handle_level = |level: usize| {
+                // Check that the level isn't empty
+                if self.0.masks[level] != 0 {
+                    // Find first bit that is set
+                    let first_bit = self.0.masks[level].trailing_zeros();
+                    // Find last bit that is set
+                    let last_bit = (size_of::<usize>() * 8) as u32 - self.0.masks[level].leading_zeros() - 1;
+                    // Check that there is more than one bit that is set
+                    if first_bit != last_bit {
+                        // Make the split point to be the avarage of first and last bit
+                        let avarage = (first_bit + last_bit) / 2;
+                        // A bit mask to get the lower half of the mask
+                        let mask = (1 << avarage) - 1;
+                        let level_prefix = if level == self.0.prefix.len() {
+                            0
+                        } else {
+                            self.0.prefix[level]
+                        };
+                        let mut other = BitProducer(BitIter {
+                            set: self.0.set,
+                            masks: [0, 0, 0, 0],
+                            prefix: [0, 0, 0],
+                        });
+                        // Take the higher half of the mask
+                        other.0.masks[level] = self.0.masks[level] & !mask;
+                        // The higher half starts iterating from the avarage
+                        other.0.prefix[level - 1] = (level_prefix | avarage) << BITS;
+                        // And preserves the prefix of higher levels
+                        for n in level..self.0.prefix.len() {
+                            other.0.prefix[n] = self.0.prefix[n];
+                        }
+                        // Take the lower half the mask
+                        self.0.masks[level] &= mask;
+                        // The lower half starts iterating from the first bit
+                        self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
+                        return Some(other);
+                    }
+                }
+                None
+            };
+            handle_level(3)
+                .or_else(|| handle_level(2))
+                .or_else(|| handle_level(1))
+        };
+        (self, other)
     }
 
     fn fold_with<F>(self, folder: F) -> F
