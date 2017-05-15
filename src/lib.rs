@@ -338,9 +338,9 @@ mod tests {
 
     #[test]
     fn iter_random_add() {
-        use rand::Rng;
+        use rand::{Rng, weak_rng};
         let mut set = BitSet::new();
-        let mut rng = ::rand::weak_rng();
+        let mut rng = weak_rng();
         let max_added = 1_048_576 / 10;
         let mut added = 0;
         for _ in 0..max_added {
@@ -389,18 +389,42 @@ mod test_parallel {
 
     #[test]
     fn par_iter_random_add() {
-        use rand::Rng;
+        use rand::{Rng, weak_rng};
+        use std::collections::HashSet;
+        use std::sync::{Arc, Mutex};
         let mut set = BitSet::new();
-        let mut rng = ::rand::weak_rng();
+        let mut check_set = HashSet::new();
+        let mut rng = weak_rng();
         let max_added = 1_048_576 / 10;
-        let mut added = 0;
         for _ in 0..max_added {
             let index = rng.gen_range(0, max_added);
-            if !set.add(index) {
-                added += 1;
-            }
+            set.add(index);
+            check_set.insert(index);
         }
-        assert_eq!(set.par_iter().count(), added as usize);
+        let check_set = Arc::new(Mutex::new(check_set));
+        let missing_set = Arc::new(Mutex::new(HashSet::new()));
+        set.par_iter()
+            .for_each(|n| {
+                let check_set = check_set.clone();
+                let missing_set = missing_set.clone();
+                let mut check = check_set.lock().unwrap();
+                if !check.remove(&n) {
+                    let mut missing = missing_set.lock().unwrap();
+                    missing.insert(n);
+                }
+            });
+        let check_set = check_set.lock().unwrap();
+        let missing_set = missing_set.lock().unwrap();
+        if !check_set.is_empty() && !missing_set.is_empty() {
+            panic!("There were values that didn't get iterated: {:?}
+            There were values that got iterated, but that shouldn't be: {:?}", *check_set, *missing_set);
+        }
+        if !check_set.is_empty() {
+            panic!("There were values that didn't get iterated: {:?}", *check_set);
+        }
+        if !missing_set.is_empty() {
+            panic!("There were values that got iterated, but that shouldn't be: {:?}", *missing_set);
+        }
     }
 
     #[test]
