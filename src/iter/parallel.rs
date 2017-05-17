@@ -53,25 +53,35 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 let first_bit = self.0.masks[level].trailing_zeros();
                 // Find last bit that is set
                 let last_bit = (size_of::<usize>() * 8) as u32 - self.0.masks[level].leading_zeros() - 1;
+                let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
                 // If there is one bit left, descend
                 if first_bit == last_bit {
+                    let idx = (level_prefix | first_bit) as usize;
+                    self.0.prefix[level - 1] = (idx as u32) << BITS;
+                    self.0.masks[level] = 0;
+                    // TODO: Make layer getter generic?
+                    self.0.masks[level - 1] = match level {
+                        1 => self.0.set.layer0(idx),
+                        2 => self.0.set.layer1(idx),
+                        3 => self.0.set.layer2(idx),
+                        _ => unreachable!("Level {} shouldn't be possible.", level),
+                    };
                     return None;
                 }
                 // Make the split point to be the avarage of first and last bit
-                let average = (first_bit + last_bit) / 2;
+                let average = (first_bit + last_bit) / 2 + 1;
                 // A bit mask to get the lower half of the mask
                 let mask = (1 << average) - 1;
-                let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
-                let mut other = BitProducer(BitIter {
-                    set: self.0.set,
-                    masks: [0, 0, 0, 0],
-                    prefix: [0, 0, 0],
-                });
+                let mut other = BitProducer(BitIter::new(self.0.set, [0, 0, 0, 0], [0, 0, 0]));
                 // Take the higher half of the mask
                 other.0.masks[level] = self.0.masks[level] & !mask;
+                // The higher levels of masks don't need to preserved as they contain just one bit.
+                for n in &self.0.masks[(level + 1)..] {
+                    debug_assert_eq!(*n, 0);
+                }
                 // The higher half starts iterating from the average
                 other.0.prefix[level - 1] = (level_prefix | average) << BITS;
-                // And preserves the prefix of the higher levels
+                // And preserve the prefix of the higher levels
                 other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
                 // Take the lower half the mask
                 self.0.masks[level] &= mask;
