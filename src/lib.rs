@@ -25,7 +25,7 @@ use util::*;
 ///
 /// Note, a `BitSet` is limited by design to only `1,048,576` indices.
 /// Adding beyond this limit will cause the `BitSet` to panic.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BitSet {
     layer3: usize,
     layer2: Vec<usize>,

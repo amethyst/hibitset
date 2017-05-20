@@ -5,6 +5,7 @@ use BitSetLike;
 /// two original sets.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
+#[derive(Debug)]
 pub struct BitSetAnd<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
@@ -31,6 +32,7 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
 /// two original sets.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
+#[derive(Debug)]
 pub struct BitSetOr<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
@@ -56,6 +58,7 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
 /// Note: the implementation is sub-optimal because layers 1-3 are not active.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
+#[derive(Debug)]
 pub struct BitSetNot<A: BitSetLike>(pub A);
 
 impl<A: BitSetLike> BitSetLike for BitSetNot<A> {

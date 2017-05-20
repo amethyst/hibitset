@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Error as FormatError, Formatter};
 use std::iter::repeat;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -24,6 +25,7 @@ use BitSetLike;
 /// clearing of bits.
 ///
 /// [`BitSet`]: ../struct.BitSet.html
+#[derive(Debug)]
 pub struct AtomicBitSet {
     layer3: AtomicUsize,
     layer2: Vec<AtomicUsize>,
@@ -235,6 +237,15 @@ impl AtomicBlock {
             .map(|l0| for l in &l0[..] {
                      l.store(0, Ordering::Relaxed);
                  });
+    }
+}
+
+impl Debug for AtomicBlock {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+        f.debug_struct("AtomicBlock")
+            .field("mask", &self.mask)
+            .field("atom", &self.atom.get().unwrap().iter())
+            .finish()
     }
 }
 
