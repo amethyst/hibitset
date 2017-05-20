@@ -1,3 +1,4 @@
+use std::default::Default;
 use std::fmt::{Debug, Error as FormatError, Formatter};
 use std::iter::repeat;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -35,17 +36,7 @@ pub struct AtomicBitSet {
 impl AtomicBitSet {
     /// Creates an empty `AtomicBitSet`.
     pub fn new() -> AtomicBitSet {
-        AtomicBitSet {
-            layer3: AtomicUsize::new(0),
-            layer2: repeat(0)
-                .map(|_| AtomicUsize::new(0))
-                .take(1 << BITS)
-                .collect(),
-            layer1: repeat(0)
-                .map(|_| AtomicBlock::new())
-                .take(1 << (2 * BITS))
-                .collect(),
-        }
+        Default::default()
     }
 
     /// Adds `id` to the `AtomicBitSet`. Returns `true` if the value was
@@ -180,6 +171,22 @@ impl BitSetLike for AtomicBitSet {
             .get()
             .map(|l0| l0[o0].load(Ordering::Relaxed))
             .unwrap_or(0)
+    }
+}
+
+impl Default for AtomicBitSet {
+    fn default() -> Self {
+        AtomicBitSet {
+            layer3: Default::default(),
+            layer2: repeat(0)
+                .map(|_| AtomicUsize::new(0))
+                .take(1 << BITS)
+                .collect(),
+            layer1: repeat(0)
+                .map(|_| AtomicBlock::new())
+                .take(1 << (2 * BITS))
+                .collect(),
+        }
     }
 }
 

@@ -25,7 +25,7 @@ use util::*;
 ///
 /// Note, a `BitSet` is limited by design to only `1,048,576` indices.
 /// Adding beyond this limit will cause the `BitSet` to panic.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BitSet {
     layer3: usize,
     layer2: Vec<usize>,
@@ -36,12 +36,7 @@ pub struct BitSet {
 impl BitSet {
     /// Creates an empty `BitSet`.
     pub fn new() -> BitSet {
-        BitSet {
-            layer3: 0,
-            layer2: Vec::new(),
-            layer1: Vec::new(),
-            layer0: Vec::new(),
-        }
+        Default::default()
     }
 
     #[inline]
