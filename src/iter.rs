@@ -4,6 +4,7 @@ use BitSetLike;
 /// An `Iterator` over a [`BitSetLike`] structure.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
+#[derive(Debug)]
 pub struct BitIter<T> {
     set: T,
     masks: [usize; 4],
