@@ -64,12 +64,10 @@ impl BitSet {
         Self::fill_up(&mut self.layer0, p0);
     }
 
-    fn fill_up(vec: &mut Vec<usize>, to: usize) {
-        if vec.len() > to {
-            return;
+    fn fill_up(vec: &mut Vec<usize>, upper_index: usize) {
+        if vec.len() <= upper_index {
+            vec.resize(upper_index + 1, 0);
         }
-
-        vec.resize(to + 1, 0);
     }
 
     /// This is used to set the levels in the hierarchy
