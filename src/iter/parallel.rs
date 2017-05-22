@@ -53,19 +53,17 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 let first_bit = self.0.masks[level].trailing_zeros();
                 // Find last bit that is set
                 let last_bit = (size_of::<usize>() * 8) as u32 - self.0.masks[level].leading_zeros() - 1;
+                // If this is the highest level, there is no prefix saved as it's always zero
                 let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
                 // If there is one bit left, descend
                 if first_bit == last_bit {
                     let idx = (level_prefix | first_bit) as usize;
+                    // When descending all of the iteration happens in the child of the bit that is left
                     self.0.prefix[level - 1] = (idx as u32) << BITS;
+                    // And because all the iteration happens in the child, it's parent can be removed.
                     self.0.masks[level] = 0;
-                    // TODO: Make layer getter generic?
-                    self.0.masks[level - 1] = match level {
-                        1 => self.0.set.layer0(idx),
-                        2 => self.0.set.layer1(idx),
-                        3 => self.0.set.layer2(idx),
-                        _ => unreachable!("Level {} shouldn't be possible.", level),
-                    };
+                    // Get the mask of the child layer from the set
+                    self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
                     return None;
                 }
                 // Make the split point to be the avarage of first and last bit
@@ -73,9 +71,10 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 // A bit mask to get the lower half of the mask
                 let mask = (1 << average) - 1;
                 let mut other = BitProducer(BitIter::new(self.0.set, [0, 0, 0, 0], [0, 0, 0]));
+                let original_mask = self.0.masks[level];
                 // Take the higher half of the mask
-                other.0.masks[level] = self.0.masks[level] & !mask;
-                // The higher levels of masks don't need to preserved as they contain just one bit.
+                other.0.masks[level] = original_mask & !mask;
+                // The higher levels of masks don't need to preserved as they are empty.
                 for n in &self.0.masks[(level + 1)..] {
                     debug_assert_eq!(*n, 0);
                 }
@@ -84,7 +83,9 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 // And preserve the prefix of the higher levels
                 other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
                 // Take the lower half the mask
-                self.0.masks[level] &= mask;
+                self.0.masks[level] = original_mask & mask;
+                // Combined mask of the current level should now equal the original mask
+                debug_assert_eq!(self.0.masks[level] | other.0.masks[level], original_mask);
                 // The lower half starts iterating from the first bit
                 self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
                 Some(other)
@@ -100,5 +101,15 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
         where F: Folder<Self::Item>
     {
         folder.consume_iter(self.0)
+    }
+}
+
+fn get_from_layer<T: BitSetLike>(set: &T, layer: usize, idx: usize) -> usize {
+    match layer {
+        0 => set.layer0(idx),
+        1 => set.layer1(idx),
+        2 => set.layer2(idx),
+        3 => set.layer3(),
+        _ => unreachable!("Invalid layer {}", layer),
     }
 }
