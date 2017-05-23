@@ -68,10 +68,10 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                     self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
                     return None;
                 }
-                // Make the split point to be the avarage of first and last bit.
+                // Make the split point to be the average of first and last bit.
                 let after_average = (first_bit + last_bit) / 2 + 1;
                 // A bit mask to get the lower half of the mask
-                // This cuts the mask to half from the avarage
+                // This cuts the mask to half from the average
                 let mask = (1 << after_average) - 1;
                 let mut other = BitProducer(BitIter::new(self.0.set, [0, 0, 0, 0], [0, 0, 0]));
                 let original_mask = self.0.masks[level];
