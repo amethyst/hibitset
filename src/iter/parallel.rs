@@ -5,7 +5,7 @@ use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge
 
 use iter::{BITS, BitSetLike, BitIter, Index};
 
-/// An `ParallelIterator` over a [`BitSetLike`] structure.
+/// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
 /// [`BitSetLike`]: ../../trait.BitSetLike.html
 pub struct BitParIter<T>(T);
@@ -52,11 +52,13 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 // Find first bit that is set
                 let first_bit = self.0.masks[level].trailing_zeros();
                 // Find last bit that is set
-                let last_bit = (size_of::<usize>() * 8) as u32 - self.0.masks[level].leading_zeros() - 1;
+                let usize_bits = size_of::<usize>() * 8;
+                let last_bit = usize_bits as u32 - self.0.masks[level].leading_zeros() - 1;
                 // If this is the highest level, there is no prefix saved as it's always zero
                 let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
                 // If there is one bit left, descend
                 if first_bit == last_bit {
+                    // Calculate the index based on prefix and the bit that is descended to
                     let idx = (level_prefix | first_bit) as usize;
                     // When descending all of the iteration happens in the child of the bit that is left
                     self.0.prefix[level - 1] = (idx as u32) << BITS;
@@ -66,10 +68,11 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                     self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
                     return None;
                 }
-                // Make the split point to be the avarage of first and last bit
-                let average = (first_bit + last_bit) / 2 + 1;
+                // Make the split point to be the avarage of first and last bit.
+                let after_average = (first_bit + last_bit) / 2 + 1;
                 // A bit mask to get the lower half of the mask
-                let mask = (1 << average) - 1;
+                // This cuts the mask to half from the avarage
+                let mask = (1 << after_average) - 1;
                 let mut other = BitProducer(BitIter::new(self.0.set, [0, 0, 0, 0], [0, 0, 0]));
                 let original_mask = self.0.masks[level];
                 // Take the higher half of the mask
@@ -78,8 +81,8 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 for n in &self.0.masks[(level + 1)..] {
                     debug_assert_eq!(*n, 0);
                 }
-                // The higher half starts iterating from the average
-                other.0.prefix[level - 1] = (level_prefix | average) << BITS;
+                // The higher half starts iterating after the average
+                other.0.prefix[level - 1] = (level_prefix | after_average) << BITS;
                 // And preserve the prefix of the higher levels
                 other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
                 // Take the lower half the mask
@@ -104,6 +107,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     }
 }
 
+/// Gets usize by layer and index from bit set.
 fn get_from_layer<T: BitSetLike>(set: &T, layer: usize, idx: usize) -> usize {
     match layer {
         0 => set.layer0(idx),
