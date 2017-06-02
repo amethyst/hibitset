@@ -8,6 +8,7 @@ use iter::{BITS, BitSetLike, BitIter, Index};
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
 /// [`BitSetLike`]: ../../trait.BitSetLike.html
+#[derive(Debug)]
 pub struct BitParIter<T>(T);
 
 impl<T> BitParIter<T> {
@@ -36,6 +37,7 @@ impl<T> ParallelIterator for BitParIter<T>
 /// Allows splitting and internally iterating through `BitSet`.
 ///
 /// Usually used internally by `BitParIter`.
+#[derive(Debug)]
 pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>);
 
 impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
