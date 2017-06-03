@@ -353,6 +353,22 @@ mod tests {
     }
 
     #[test]
+    fn iter_clusters() {
+        let mut set = BitSet::new();
+        for x in 0..8 {
+            let x = (x * 3) << (::BITS * 2); // scale to the last slot
+            for y in 0..8 {
+                let y = (y * 3) << (::BITS);
+                for z in 0..8 {
+                    let z = z * 2;
+                    set.add(x + y + z);
+                }
+            }
+        }
+        assert_eq!(set.iter().count(), 8usize.pow(3));
+    }
+
+    #[test]
     fn not() {
         let mut c = BitSet::new();
         for i in 0..10_000 {
@@ -442,5 +458,49 @@ mod test_parallel {
         assert_eq!((&odd).par_iter().count(), 50_000);
         assert_eq!((&even).par_iter().count(), 50_000);
         assert_eq!(BitSetAnd(&odd, &even).par_iter().count(), 0);
+    }
+
+    #[test]
+    fn par_iter_clusters() {
+        use std::collections::HashSet;
+        use std::sync::{Arc, Mutex};
+        let mut set = BitSet::new();
+        let mut check_set = HashSet::new();
+        for x in 0..8 {
+            let x = (x * 3) << (::BITS * 2); // scale to the last slot
+            for y in 0..8 {
+                let y = (y * 3) << (::BITS);
+                for z in 0..8 {
+                    let z = z * 2;
+                    let index = x + y + z;
+                    set.add(index);
+                    check_set.insert(index);
+                }
+            }
+        }
+        let check_set = Arc::new(Mutex::new(check_set));
+        let missing_set = Arc::new(Mutex::new(HashSet::new()));
+        set.par_iter()
+            .for_each(|n| {
+                let check_set = check_set.clone();
+                let missing_set = missing_set.clone();
+                let mut check = check_set.lock().unwrap();
+                if !check.remove(&n) {
+                    let mut missing = missing_set.lock().unwrap();
+                    missing.insert(n);
+                }
+            });
+        let check_set = check_set.lock().unwrap();
+        let missing_set = missing_set.lock().unwrap();
+        if !check_set.is_empty() && !missing_set.is_empty() {
+            panic!("There were values that didn't get iterated: {:?}
+            There were values that got iterated, but that shouldn't be: {:?}", *check_set, *missing_set);
+        }
+        if !check_set.is_empty() {
+            panic!("There were values that didn't get iterated: {:?}", *check_set);
+        }
+        if !missing_set.is_empty() {
+            panic!("There were values that got iterated, but that shouldn't be: {:?}", *missing_set);
+        }
     }
 }
