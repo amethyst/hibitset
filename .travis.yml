@@ -1,6 +1,11 @@
 sudo: false
 language: rust
 cache: cargo
+branches:
+  only:
+    - staging
+    - trying
+    - master
 rust:
   - nightly
   - stable
