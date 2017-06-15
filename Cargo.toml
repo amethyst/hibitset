@@ -1,6 +1,6 @@
 [package]
 name = "hibitset"
-version = "0.1.2"
+version = "0.1.3"
 description = "Hierarchical bit set structure"
 documentation = "https://slide-rs.github.io/hibitset/"
 repository = "https://github.com/slide-rs/hibitset"
@@ -12,9 +12,8 @@ authors = ["csheratt"]
 atom = "0.3"
 
 [dependencies.rayon]
-version = "0.7"
+version = "0.7.1"
 optional = true
-features = ["unstable"]
 
 [dev-dependencies]
 rand = "0.3"
