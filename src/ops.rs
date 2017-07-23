@@ -28,8 +28,8 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
 }
 
 /// `BitSetOr` takes two [`BitSetLike`] items, and merges the masks
-/// returning a new virtual set, which represents an merged of the
-/// two original sets.
+/// returning a new virtual set, which represents a merged OR operation
+/// of the two original sets.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
@@ -77,5 +77,47 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     #[inline]
     fn layer0(&self, i: usize) -> usize {
         !self.0.layer0(i)
+    }
+}
+
+/// `BitSetXor` takes two [`BitSetLike`] items, and merges the masks
+/// returning a new virtual set, which represents a merged XOR operation 
+/// of the two original sets.
+///
+/// [`BitSetLike`]: ../trait.BitSetLike.html
+#[derive(Debug)]
+pub struct BitSetXor<A: BitSetLike, B: BitSetLike>(pub A, pub B);
+
+impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
+    #[inline]
+    fn layer3(&self) -> usize {
+        if self.0.layer3() & self.1.layer3() > 0 {
+            self.0.layer3()
+        }
+        else {
+            self.0.layer3() ^ self.1.layer3()
+        }
+    }
+    #[inline]
+    fn layer2(&self, i: usize) -> usize {
+        if self.0.layer2(i) & self.1.layer2(i) > 0 {
+            self.0.layer2(i)
+        }
+        else {
+            self.0.layer2(i) ^ self.1.layer2(i)
+        }
+    }
+    #[inline]
+    fn layer1(&self, i: usize) -> usize {
+        if self.0.layer1(i) & self.1.layer1(i) > 0 {
+            self.0.layer1(i)
+        }
+        else {
+            self.0.layer1(i) ^ self.1.layer1(i)
+        }
+    }
+    #[inline]
+    fn layer0(&self, i: usize) -> usize {
+        self.0.layer0(i) ^ self.1.layer0(i)
     }
 }
