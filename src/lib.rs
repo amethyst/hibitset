@@ -260,9 +260,99 @@ impl BitSetLike for BitSet {
     }
 }
 
+/// Specialized BitSet-esque struct for filtering a single bit.
+#[derive(Debug)]
+pub struct SingularBitSet {
+    index: Option<Index>,
+    layer2: (usize, usize), // (Row in parent layer, single bit mask)
+    layer1: (usize, usize),
+    layer0: (usize, usize),
+}
+
+impl SingularBitSet {
+    /// Creates a new single bit bitset from an index.
+    pub fn new(index: Option<Index>) -> SingularBitSet {
+        match index {
+            Some(index) => {
+                let (p0, p1, p2) = offsets(index);
+                SingularBitSet {
+                    index: Some(index),
+                    layer2: (p2, index.mask(SHIFT2)),
+                    layer1: (p1, index.mask(SHIFT1)),
+                    layer0: (p0, index.mask(SHIFT0)),
+                }
+            },
+            None => {
+                SingularBitSet {
+                    index: None,
+                    layer2: (0, 0),
+                    layer1: (0, 0),
+                    layer0: (0, 0),
+                }
+            }
+        }
+    }
+
+    /// Gets the index of the bitset.
+    #[inline]
+    pub fn index(&self) -> Option<Index> {
+        self.index
+    }
+
+    /// Sets the index of the bitset.
+    pub fn set_index(&mut self, index: Option<Index>) {
+        match index {
+            Some(index) => {
+                let (p0, p1, p2) = offsets(index);
+                self.index = Some(index);
+                self.layer2 = (p2, index.mask(SHIFT2));
+                self.layer1 = (p1, index.mask(SHIFT1));
+                self.layer0 = (p0, index.mask(SHIFT0));
+            },
+            None => {
+                self.index = None;
+            }
+        }
+    }
+}
+
+impl BitSetLike for SingularBitSet {
+    #[inline]
+    fn layer3(&self) -> usize {
+        match self.index {
+            Some(_) => 1,
+            None => 0,
+        }
+    }
+
+    #[inline]
+    fn layer2(&self, i: usize) -> usize {
+        match self.index {
+            Some(_) if self.layer2.0 == i => self.layer2.1,
+            _ => 0,
+        }
+    }
+
+    #[inline]
+    fn layer1(&self, i: usize) -> usize {
+        match self.index {
+            Some(_) if self.layer1.0 == i => self.layer1.1,
+            _ => 0,
+        }
+    }
+
+    #[inline]
+    fn layer0(&self, i: usize) -> usize {
+        match self.index {
+            Some(_) if self.layer0.0 == i => self.layer0.1,
+            _ => 0,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{BitSet, BitSetAnd, BitSetNot, BitSetLike};
+    use super::{BitSet, BitSetAnd, BitSetNot, BitSetLike, Index, SingularBitSet};
 
     #[test]
     fn insert() {
@@ -379,6 +469,39 @@ mod tests {
         let d = BitSetNot(c);
         for (idx, i) in d.iter().take(5_000).enumerate() {
             assert_eq!(idx * 2, i as usize);
+        }
+    }
+
+    #[test]
+    fn single() {
+        let mut singular = SingularBitSet::new(None);
+        let mut bitset = BitSet::new();
+        bitset.add(1);
+        bitset.add(20);
+        bitset.add(20_000);
+        bitset.add(200_000);
+
+        {
+            let added = BitSetAnd(&singular, &bitset);
+            let iterated = added.iter().collect::<Vec<Index>>();
+            assert_eq!(iterated, vec![]);
+
+            let not = BitSetAnd(BitSetNot(&singular), &bitset);
+            let iterated = not.iter().collect::<Vec<Index>>();
+            assert_eq!(iterated, vec![1, 20, 20_000, 200_000]);
+        }
+
+        singular.set_index(Some(1));
+        assert_eq!(singular.index(), Some(1));
+
+        {
+            let added = BitSetAnd(&singular, &bitset);
+            let iterated = added.iter().collect::<Vec<Index>>();
+            assert_eq!(iterated, vec![1]);
+
+            let not = BitSetAnd(BitSetNot(&singular), &bitset);
+            let iterated = not.iter().collect::<Vec<Index>>();
+            assert_eq!(iterated, vec![20, 20_000, 200_000]);
         }
     }
 }
