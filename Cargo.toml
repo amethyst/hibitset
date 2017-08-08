@@ -12,7 +12,7 @@ authors = ["csheratt"]
 atom = "0.3"
 
 [dependencies.rayon]
-version = "0.7.1"
+version = "0.8.2"
 optional = true
 
 [dev-dependencies]
