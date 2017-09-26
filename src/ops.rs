@@ -1,4 +1,7 @@
-use BitSetLike;
+
+use std::ops::{BitAnd, BitOr, Not};
+
+use {BitSet, BitSetLike};
 
 /// `BitSetAnd` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an intersection of the
@@ -79,3 +82,42 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
         !self.0.layer0(i)
     }
 }
+
+macro_rules! operator {
+    ( $bitset:ident ( $( $arg:ident ),* ) ) => {
+        impl<$( $arg ),*> Not for $bitset<$( $arg ),*>
+            where $( $arg: BitSetLike ),*
+        {
+            type Output = BitSetNot<Self>;
+            fn not(self) -> Self::Output {
+                BitSetNot(self)
+            }
+        }
+
+        impl<$( $arg,  )* T> BitAnd<T> for $bitset<$( $arg ),*>
+            where T: BitSetLike,
+                  $( $arg: BitSetLike ),*
+        {
+            type Output = BitSetAnd<Self, T>;
+            fn bitand(self, rhs: T) -> Self::Output {
+                BitSetAnd(self, rhs)
+            }
+        }
+
+        impl<$( $arg, )* T> BitOr<T> for $bitset<$( $arg ),*>
+            where T: BitSetLike,
+                  $( $arg: BitSetLike ),*
+        {
+            type Output = BitSetOr<Self, T>;
+            fn bitor(self, rhs: T) -> Self::Output {
+                BitSetOr(self, rhs)
+            }
+        }
+
+    }
+}
+
+operator!(BitSet());
+operator!(BitSetAnd(A, B));
+operator!(BitSetNot(A));
+operator!(BitSetOr(A, B));
