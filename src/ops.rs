@@ -115,8 +115,8 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
 }
 
 macro_rules! operator {
-    ( $bitset:ident ( $( $arg:ident ),* ) ) => {
-        impl<$( $arg ),*> Not for $bitset<$( $arg ),*>
+    ( impl < ( $( $lifetime:tt )* ) ( $( $arg:ident ),* ) > for $bitset:ty ) => {
+        impl<$( $lifetime, )* $( $arg ),*> Not for $bitset
             where $( $arg: BitSetLike ),*
         {
             type Output = BitSetNot<Self>;
@@ -125,7 +125,7 @@ macro_rules! operator {
             }
         }
 
-        impl<$( $arg,  )* T> BitAnd<T> for $bitset<$( $arg ),*>
+        impl<$( $lifetime, )* $( $arg, )* T> BitAnd<T> for $bitset
             where T: BitSetLike,
                   $( $arg: BitSetLike ),*
         {
@@ -135,7 +135,7 @@ macro_rules! operator {
             }
         }
 
-        impl<$( $arg, )* T> BitOr<T> for $bitset<$( $arg ),*>
+        impl<$( $lifetime, )* $( $arg, )* T> BitOr<T> for $bitset
             where T: BitSetLike,
                   $( $arg: BitSetLike ),*
         {
@@ -144,12 +144,14 @@ macro_rules! operator {
                 BitSetOr(self, rhs)
             }
         }
-
     }
 }
 
-operator!(BitSet());
-operator!(BitSetAnd(A, B));
-operator!(BitSetNot(A));
-operator!(BitSetOr(A, B));
-operator!(BitSetXor(A, B));
+operator!(impl<()()> for BitSet);
+operator!(impl<('a)()> for &'a BitSet);
+operator!(impl<()(A)> for BitSetNot<A>);
+operator!(impl<('a)(A)> for &'a BitSetNot<A>);
+operator!(impl<()(A, B)> for BitSetAnd<A, B>);
+operator!(impl<('a)(A, B)> for &'a BitSetAnd<A, B>);
+operator!(impl<()(A, B)> for BitSetOr<A, B>);
+operator!(impl<('a)(A, B)> for &'a BitSetOr<A, B>);
