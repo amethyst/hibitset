@@ -83,6 +83,37 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     }
 }
 
+/// `BitSetXor` takes two [`BitSetLike`] items, and merges the masks
+/// returning a new virtual set, which represents an merged of the
+/// two original sets.
+///
+/// [`BitSetLike`]: ../trait.BitSetLike.html
+#[derive(Debug)]
+pub struct BitSetXor<A: BitSetLike, B: BitSetLike>(pub A, pub B);
+
+impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
+    #[inline]
+    fn layer3(&self) -> usize {
+        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        xor.layer3()
+    }
+    #[inline]
+    fn layer2(&self, id: usize) -> usize {
+        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        xor.layer2(id)
+    }
+    #[inline]
+    fn layer1(&self, id: usize) -> usize {
+        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        xor.layer1(id)
+    }
+    #[inline]
+    fn layer0(&self, id: usize) -> usize {
+        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        xor.layer0(id)
+    }
+}
+
 macro_rules! operator {
     ( $bitset:ident ( $( $arg:ident ),* ) ) => {
         impl<$( $arg ),*> Not for $bitset<$( $arg ),*>
@@ -121,3 +152,4 @@ operator!(BitSet());
 operator!(BitSetAnd(A, B));
 operator!(BitSetNot(A));
 operator!(BitSetOr(A, B));
+operator!(BitSetXor(A, B));
