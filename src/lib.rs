@@ -21,7 +21,7 @@ pub use atomic::AtomicBitSet;
 pub use iter::BitIter;
 #[cfg(feature="parallel")]
 pub use iter::{BitParIter, BitProducer};
-pub use ops::{BitSetAnd, BitSetNot, BitSetOr};
+pub use ops::{BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
 
 use util::*;
 
