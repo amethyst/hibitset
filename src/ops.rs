@@ -1,5 +1,5 @@
 
-use std::ops::{BitAnd, BitOr, Not};
+use std::ops::{BitAnd, BitOr, BitXor, Not};
 
 use {BitSet, BitSetLike};
 
@@ -144,6 +144,17 @@ macro_rules! operator {
                 BitSetOr(self, rhs)
             }
         }
+
+        impl<$( $lifetime, )* $( $arg, )* T> BitXor<T> for $bitset
+            where T: BitSetLike,
+                  $( $arg: BitSetLike ),*
+        {
+            type Output = BitSetXor<Self, T>;
+            fn bitxor(self, rhs: T) -> Self::Output {
+                BitSetXor(self, rhs)
+            }
+        }
+
     }
 }
 
@@ -155,3 +166,82 @@ operator!(impl<()(A, B)> for BitSetAnd<A, B>);
 operator!(impl<('a)(A, B)> for &'a BitSetAnd<A, B>);
 operator!(impl<()(A, B)> for BitSetOr<A, B>);
 operator!(impl<('a)(A, B)> for &'a BitSetOr<A, B>);
+operator!(impl<()(A, B)> for BitSetXor<A, B>);
+operator!(impl<('a)(A, B)> for &'a BitSetXor<A, B>);
+
+#[cfg(test)]
+mod tests {
+    use {Index, BitSet, BitSetLike, BitSetXor};
+
+    #[test]
+    fn operators() {
+        let mut bitset = BitSet::new();
+        bitset.add(1);
+        bitset.add(3);
+        bitset.add(5);
+        bitset.add(15);
+        bitset.add(200);
+        bitset.add(50001);
+
+        let mut other = BitSet::new();
+        other.add(1);
+        other.add(3);
+        other.add(50000);
+        other.add(50001);
+
+        {
+            let not = &bitset & !&bitset;
+            assert_eq!(not.iter().count(), 0);
+        }
+
+        {
+            let either = &bitset | &other;
+            let collected = either.iter().collect::<Vec<Index>>();
+            assert_eq!(collected, vec![1, 3, 5, 15, 200, 50000, 50001]);
+
+            let either_sanity = bitset.clone() | other.clone();
+            assert_eq!(collected, either_sanity.iter().collect::<Vec<Index>>());
+        }
+
+        {
+            let same = &bitset & &other;
+            let collected = same.iter().collect::<Vec<Index>>();
+            assert_eq!(collected, vec![1, 3, 50001]);
+
+            let same_sanity = bitset.clone() & other.clone();
+            assert_eq!(collected, same_sanity.iter().collect::<Vec<Index>>());
+        }
+
+        {
+            let exclusive = &bitset ^ &other;
+            let collected = exclusive.iter().collect::<Vec<Index>>();
+            assert_eq!(collected, vec![5, 15, 200, 50000]);
+
+            let exclusive_sanity = bitset.clone() ^ other.clone();
+            assert_eq!(collected, exclusive_sanity.iter().collect::<Vec<Index>>());
+        }
+    }
+
+    #[test]
+    fn xor() {
+        // 0011
+        let mut bitset = BitSet::new();
+        bitset.add(2);
+        bitset.add(3);
+        bitset.add(50000);
+
+        // 0101
+        let mut other = BitSet::new();
+        other.add(1);
+        other.add(3);
+        other.add(50000);
+        other.add(50001);
+
+        {
+            // 0110
+            let xor = BitSetXor(&bitset, &other);
+            let collected = xor.iter().collect::<Vec<Index>>();
+            assert_eq!(collected, vec![1, 2, 50001]);
+        }
+    }
+}
