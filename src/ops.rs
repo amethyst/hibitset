@@ -1,7 +1,7 @@
 
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 
-use {BitSet, BitSetLike};
+use {BitIter, BitSet, BitSetLike};
 
 /// `BitSetAnd` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an intersection of the
@@ -116,6 +116,16 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
 
 macro_rules! operator {
     ( impl < ( $( $lifetime:tt )* ) ( $( $arg:ident ),* ) > for $bitset:ty ) => {
+        impl<$( $lifetime, )* $( $arg ),*> IntoIterator for $bitset
+            where $( $arg: BitSetLike ),*
+        {
+            type Item = <BitIter<Self> as Iterator>::Item;
+            type IntoIter = BitIter<Self>;
+            fn into_iter(self) -> Self::IntoIter {
+                self.iter()
+            }
+        }
+
         impl<$( $lifetime, )* $( $arg ),*> Not for $bitset
             where $( $arg: BitSetLike ),*
         {
