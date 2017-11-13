@@ -2,7 +2,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
 use iter::{BITS, BitSetLike, BitIter, Index};
-use util::average_bit;
+use util::average_ones;
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
@@ -51,51 +51,32 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     /// TODO: Better explanation of the algorithm.
     fn split(mut self) -> (Self, Option<Self>) {
         let other = {
-            let mut handle_level = |level: usize| {
-                // If the level is empty, there isn't anything go through
-                if self.0.masks[level] == 0 {
-                    return None;
-                }
-                let average_bit = average_bit(self.0.masks[level]);
-
-                // If this is the highest level, there is no prefix saved as it's always zero
+            let mut handle_level = |level: usize| if self.0.masks[level] == 0 {
+                None
+            } else {
+                // Top levels prefix is zero because it comes first
                 let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
-                // If there is one bit left, descend
                 let first_bit = self.0.masks[level].trailing_zeros();
-
-                if let Some(average_bit) = average_bit {
-                    let mask = (1 << (average_bit - 1)) - 1;
-
-                    let mut other = BitProducer(BitIter::new(self.0.set, [0, 0, 0, 0], [0, 0, 0]));
-                    let original_mask = self.0.masks[level];
-                    // Take the higher half of the mask
-                    other.0.masks[level] = original_mask & !mask;
-                    // The higher levels of masks don't need to preserved as they are empty.
-                    for n in &self.0.masks[(level + 1)..] {
-                        debug_assert_eq!(*n, 0);
-                    }
-                    // The higher half starts iterating after the average
-                    other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
-                    // And preserve the prefix of the higher levels
-                    other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
-                    // Take the lower half the mask
-                    self.0.masks[level] = original_mask & mask;
-                    // Combined mask of the current level should now equal the original mask
-                    debug_assert_eq!(self.0.masks[level] | other.0.masks[level], original_mask);
-                    // The lower half starts iterating from the first bit
-                    self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
-                    Some(other)
-                } else {
-                    // Calculate the index based on prefix and the bit that is descended to
-                    let idx = level_prefix as usize | first_bit as usize;
-                    // When descending all of the iteration happens in the child of the bit that is left
-                    self.0.prefix[level - 1] = (idx as u32) << BITS;
-                    // And because all the iteration happens in the child, it's parent can be removed.
-                    self.0.masks[level] = 0;
-                    // Get the mask of the child layer from the set
-                    self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
-                    None
-                }
+                average_ones(self.0.masks[level])
+                    .and_then(|average_bit| {
+                        let mask = (1 << (average_bit - 1)) - 1;
+                        let mut other = BitProducer(BitIter::new(self.0.set, [0; 4], [0; 3]));
+                        // `other` is the more significant half of the mask
+                        other.0.masks[level] = self.0.masks[level] & !mask;
+                        other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
+                        other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
+                        // And `self` is the less significant one
+                        self.0.masks[level] &= mask;
+                        self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
+                        Some(other)
+                    }).or_else(|| {
+                        // Because there is only one bit left we descend to it
+                        let idx = level_prefix as usize | first_bit as usize;
+                        self.0.prefix[level - 1] = (idx as u32) << BITS;
+                        self.0.masks[level] = 0;
+                        self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
+                        None
+                    })
             };
             handle_level(3)
                 .or_else(|| handle_level(2))

@@ -56,20 +56,33 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
     (bit.offset(SHIFT1), bit.offset(SHIFT2), bit.offset(SHIFT3))
 }
 
-pub fn average_bit(n: usize) -> Option<usize> {
+/// Finds the highest bit that splits ones of the `usize` to half (rounding up).
+///
+/// Returns `None` if the `usize` has only one or zero ones.
+///
+/// # Examples
+/// ````rust,ignore
+/// use hibitset::util::average_ones;
+///
+/// assert_eq!(Some(3), average_ones(0b10110));
+/// assert_eq!(Some(6), average_ones(0b100010));
+/// assert_eq!(None, average_ones(0));
+/// assert_eq!(None, average_ones(1));
+/// ````
+pub fn average_ones(n: usize) -> Option<usize> {
     #[cfg(target_pointer_width= "64")]
     fn average(n: usize) -> Option<usize> {
-        average_bit_u64(n as u64).map(|n| n as usize)
+        average_ones_u64(n as u64).map(|n| n as usize)
     }
     #[cfg(target_pointer_width= "32")]
     fn average(n: usize) -> Option<usize> {
-        average_bit_u64(n as u32).map(|n| n as usize)
+        average_ones_u64(n as u32).map(|n| n as usize)
     }
     average(n)
 }
 
 #[allow(dead_code)]
-fn average_bit_u32(n: u32) -> Option<u32> {
+fn average_ones_u32(n: u32) -> Option<u32> {
     use std::num::Wrapping as W;
     let n = W(n);
     const PAR: [W<u32>; 5] = [
@@ -116,7 +129,7 @@ fn average_bit_u32(n: u32) -> Option<u32> {
 }
 
 #[test]
-fn parity_0_average_bit_u32() {
+fn parity_0_average_ones_u32() {
     struct EvenParity(u32);
 
     impl Iterator for EvenParity {
@@ -140,7 +153,7 @@ fn parity_0_average_bit_u32() {
     for i in 0..steps {
         let pos = i * (u32::max_value() / steps);
         for i in EvenParity(pos).take(steps as usize) {
-            let mask = (1 << (average_bit_u32(i).unwrap_or(32) - 1)) - 1;
+            let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
             assert_eq!(
                 (i & mask).count_ones(),
                 (i & !mask).count_ones(),
@@ -151,7 +164,7 @@ fn parity_0_average_bit_u32() {
 }
 
 #[test]
-fn parity_1_average_bit_u32() {
+fn parity_1_average_ones_u32() {
     struct OddParity(u32);
 
     impl Iterator for OddParity {
@@ -175,7 +188,7 @@ fn parity_1_average_bit_u32() {
     for i in 0..steps {
         let pos = i * (u32::max_value() / steps);
         for i in OddParity(pos).take(steps as usize) {
-            let mask = (1 << (average_bit_u32(i).unwrap_or(32) - 1)) - 1;
+            let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
             let a = (i & mask).count_ones();
             let b = (i & !mask).count_ones();
             if a < b {
@@ -190,23 +203,23 @@ fn parity_1_average_bit_u32() {
 }
 
 #[test]
-fn empty_average_bit_u32() {
-    assert_eq!(None, average_bit_u32(0));
+fn empty_average_ones_u32() {
+    assert_eq!(None, average_ones_u32(0));
 }
 
 #[test]
-fn singleton_average_bit_u32() {
+fn singleton_average_ones_u32() {
     for i in 0..32 {
         assert_eq!(
             None,
-            average_bit_u32(1 << i),
+            average_ones_u32(1 << i),
             "{:x}", i
         );
     }
 }
 
 #[allow(dead_code)]
-fn average_bit_u64(n: u64) -> Option<u64> {
+fn average_ones_u64(n: u64) -> Option<u64> {
     use std::num::Wrapping as W;
     let n = W(n);
     const PAR: [W<u64>; 6] = [
@@ -257,7 +270,7 @@ fn average_bit_u64(n: u64) -> Option<u64> {
 }
 
 #[test]
-fn parity_0_average_masks_u64() {
+fn parity_0_average_ones_u64() {
     struct EvenParity(u64);
 
     impl Iterator for EvenParity {
@@ -281,7 +294,7 @@ fn parity_0_average_masks_u64() {
     for i in 0..steps {
         let pos = i * (u64::max_value() / steps);
         for i in EvenParity(pos).take(steps as usize) {
-            let mask = (1 << (average_bit_u64(i).unwrap_or(64) - 1)) - 1;
+            let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
             assert_eq!(
                 (i & mask).count_ones(),
                 (i & !mask).count_ones(),
@@ -292,7 +305,7 @@ fn parity_0_average_masks_u64() {
 }
 
 #[test]
-fn parity_1_average_bit_u64() {
+fn parity_1_average_ones_u64() {
     struct OddParity(u64);
 
     impl Iterator for OddParity {
@@ -316,7 +329,7 @@ fn parity_1_average_bit_u64() {
     for i in 0..steps {
         let pos = i * (u64::max_value() / steps);
         for i in OddParity(pos).take(steps as usize) {
-            let mask = (1 << (average_bit_u64(i).unwrap_or(64) - 1)) - 1;
+            let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
             let a = (i & mask).count_ones();
             let b = (i & !mask).count_ones();
             if a < b {
@@ -331,30 +344,30 @@ fn parity_1_average_bit_u64() {
 }
 
 #[test]
-fn empty_average_bit_u64() {
-    assert_eq!(None, average_bit_u64(0));
+fn empty_average_ones_u64() {
+    assert_eq!(None, average_ones_u64(0));
 }
 
 #[test]
-fn singleton_average_bit_u64() {
+fn singleton_average_ones_u64() {
     for i in 0..64 {
         assert_eq!(
             None,
-            average_bit_u64(1 << i),
+            average_ones_u64(1 << i),
             "{:x}", i
         );
     }
 }
 
 #[test]
-fn average_bits_agree_u32_u64() {
+fn average_ones_agree_u32_u64() {
     let steps = 1000;
     for i in 0..steps {
         let pos = i * (u32::max_value() / steps);
         for i in pos..steps {
             assert_eq!(
-                average_bit_u32(i),
-                average_bit_u64(i as u64).map(|n| n as u32),
+                average_ones_u32(i),
+                average_ones_u64(i as u64).map(|n| n as u32),
                 "{:x}", i
             );
         }
