@@ -43,18 +43,39 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     where T: BitSetLike
 {
     type Item = Index;
-    /// The splitting strategy used assumes that the bitset is distributed
-    /// axproximately uniformly.
+
+    /// How the splitting is done:
     ///
-    /// Splitting the bitset into two parts is done highest level
-    /// that still has more than one children.
-    /// TODO: Better explanation of the algorithm.
+    /// 1) First the highest layer that has at least one set bit
+    ///    is searched.
+    ///
+    /// 2) If the layer that was found only has one set bit,
+    ///    it's cleared, the correct prefix for the bit is figured
+    ///    out and descending is continued.
+    ///
+    /// 3) If the layer has more than one set bit, a mask is created
+    ///    that splits the set bits of the layer as close to half
+    ///    as possible.
+    ///    After that the layer is masked by either the mask or
+    ///    it's complement constructing two distinct producers which
+    ///    are then returned.
+    ///
+    /// 4) If there isn't any layers that have more than one set bit,
+    ///    splitting doesn't happen.
+    ///
+    /// The actual iteration is performed by the sequential iterator
+    /// `BitIter` which internals are modified by this splitting
+    ///  algorithm.
+    ///
+    /// The splitting is only done for 3 highest levels of the bitset
+    /// and thus if all of the bits are set then the smallest possible unit
+    /// of work is `usize` bits.
     fn split(mut self) -> (Self, Option<Self>) {
         let other = {
             let mut handle_level = |level: usize| if self.0.masks[level] == 0 {
                 None
             } else {
-                // Top levels prefix is zero because it comes first
+                // Top levels prefix is zero because there is nothing before it
                 let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
                 let first_bit = self.0.masks[level].trailing_zeros();
                 average_ones(self.0.masks[level])

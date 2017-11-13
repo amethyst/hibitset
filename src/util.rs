@@ -56,9 +56,10 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
     (bit.offset(SHIFT1), bit.offset(SHIFT2), bit.offset(SHIFT3))
 }
 
-/// Finds the highest bit that splits ones of the `usize` to half (rounding up).
+/// Finds the highest bit that splits set bits of the `usize`
+/// to half (rounding up).
 ///
-/// Returns `None` if the `usize` has only one or zero ones.
+/// Returns `None` if the `usize` has only one or zero set bits.
 ///
 /// # Examples
 /// ````rust,ignore
@@ -69,6 +70,7 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 /// assert_eq!(None, average_ones(0));
 /// assert_eq!(None, average_ones(1));
 /// ````
+// TODO: Can 64/32 bit variants be merged to one implementation?
 pub fn average_ones(n: usize) -> Option<usize> {
     #[cfg(target_pointer_width= "64")]
     fn average(n: usize) -> Option<usize> {
@@ -93,7 +95,7 @@ fn average_ones_u32(n: u32) -> Option<u32> {
         W(0x0000FFFF),
     ];
 
-    // Counting ones in parallel
+    // Counting set bits in parallel
     let a = n - ((n >> 1) & PAR[0]);
     let b = (a & PAR[1]) + ((a >> 2) & PAR[1]);
     let c = (b + (b >> 4)) & PAR[2];
@@ -231,7 +233,7 @@ fn average_ones_u64(n: u64) -> Option<u64> {
         W(0x00000000FFFFFFFF)
     ];
 
-    // Counting ones in parallel
+    // Counting set bits in parallel
     let a = n - ((n >> 1) & PAR[0]);
     let b = (a & PAR[1]) + ((a >> 2) & PAR[1]);
     let c = (b + (b >> 4)) & PAR[2];
