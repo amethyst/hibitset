@@ -43,12 +43,29 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     where T: BitSetLike
 {
     type Item = Index;
-    /// The splitting strategy used assumes that the bitset is distributed
-    /// axproximately uniformly.
+
+    /// How splitting is done:
     ///
-    /// Splitting the bitset into two parts is done highest level
-    /// that still has more than one children.
-    /// TODO: Better explanation of the algorithm.
+    /// 1) We find the highest layer that has at least one set bit.
+    ///
+    /// 2) If the layer we find only has one set bit, we clear it
+    ///    and descend layer down.
+    ///
+    /// 3) If the layer has more than one set bit, we create mask
+    ///    that splits the bits of the layer in half so that
+    ///    both sides have half of the set bits.
+    ///    Then we mask the layer either by mask or it's complement,
+    ///    so that we can construct two distinct producers which we
+    ///    return.
+    ///
+    /// 4) If there isn't any layers that has more one set bit,
+    ///    splitting doesn't happen.
+    ///
+    /// The actual iteration is performed by the sequential iterator
+    /// `BitIter` which internals are set by this splitting algorithm.
+    ///
+    /// The splitting is only done in 3 highest levels of the bit set
+    /// so that the smallest unit of work possible is usize bits.
     fn split(mut self) -> (Self, Option<Self>) {
         let other = {
             let mut handle_level = |level: usize| if self.0.masks[level] == 0 {

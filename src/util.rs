@@ -69,6 +69,7 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 /// assert_eq!(None, average_ones(0));
 /// assert_eq!(None, average_ones(1));
 /// ````
+// TODO: Can 64/32 bit variants be merged to one implementation?
 pub fn average_ones(n: usize) -> Option<usize> {
     #[cfg(target_pointer_width= "64")]
     fn average(n: usize) -> Option<usize> {
