@@ -1,5 +1,3 @@
-use std::mem::size_of;
-
 use rayon::iter::ParallelIterator;
 use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
@@ -58,19 +56,36 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 if self.0.masks[level] == 0 {
                     return None;
                 }
-                let usize_bits = size_of::<usize>() * 8;
-
                 let average_bit = average_bit(self.0.masks[level]);
-                let mask = (1 << (average_bit - 1)) - 1;
 
                 // If this is the highest level, there is no prefix saved as it's always zero
                 let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
                 // If there is one bit left, descend
                 let first_bit = self.0.masks[level].trailing_zeros();
-                let last_bit = usize_bits as u32 - self.0.masks[level].leading_zeros() - 1;
 
-                // TODO: Only time average bit should be maximum is when there is 0 or 1 bit in it.
-                if average_bit == usize_bits {
+                if let Some(average_bit) = average_bit {
+                    let mask = (1 << (average_bit - 1)) - 1;
+
+                    let mut other = BitProducer(BitIter::new(self.0.set, [0, 0, 0, 0], [0, 0, 0]));
+                    let original_mask = self.0.masks[level];
+                    // Take the higher half of the mask
+                    other.0.masks[level] = original_mask & !mask;
+                    // The higher levels of masks don't need to preserved as they are empty.
+                    for n in &self.0.masks[(level + 1)..] {
+                        debug_assert_eq!(*n, 0);
+                    }
+                    // The higher half starts iterating after the average
+                    other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
+                    // And preserve the prefix of the higher levels
+                    other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
+                    // Take the lower half the mask
+                    self.0.masks[level] = original_mask & mask;
+                    // Combined mask of the current level should now equal the original mask
+                    debug_assert_eq!(self.0.masks[level] | other.0.masks[level], original_mask);
+                    // The lower half starts iterating from the first bit
+                    self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
+                    Some(other)
+                } else {
                     // Calculate the index based on prefix and the bit that is descended to
                     let idx = level_prefix as usize | first_bit as usize;
                     // When descending all of the iteration happens in the child of the bit that is left
@@ -79,27 +94,8 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                     self.0.masks[level] = 0;
                     // Get the mask of the child layer from the set
                     self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
-                    return None;
+                    None
                 }
-                let mut other = BitProducer(BitIter::new(self.0.set, [0, 0, 0, 0], [0, 0, 0]));
-                let original_mask = self.0.masks[level];
-                // Take the higher half of the mask
-                other.0.masks[level] = original_mask & !mask;
-                // The higher levels of masks don't need to preserved as they are empty.
-                for n in &self.0.masks[(level + 1)..] {
-                    debug_assert_eq!(*n, 0);
-                }
-                // The higher half starts iterating after the average
-                other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
-                // And preserve the prefix of the higher levels
-                other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
-                // Take the lower half the mask
-                self.0.masks[level] = original_mask & mask;
-                // Combined mask of the current level should now equal the original mask
-                debug_assert_eq!(self.0.masks[level] | other.0.masks[level], original_mask);
-                // The lower half starts iterating from the first bit
-                self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
-                Some(other)
             };
             handle_level(3)
                 .or_else(|| handle_level(2))
