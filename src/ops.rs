@@ -3,6 +3,8 @@ use std::ops::{BitAnd, BitOr, BitXor, Not};
 
 use {BitIter, BitSet, BitSetLike};
 
+use util::*;
+
 /// `BitSetAnd` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an intersection of the
 /// two original sets.
@@ -27,6 +29,10 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
     #[inline]
     fn layer0(&self, i: usize) -> usize {
         self.0.layer0(i) & self.1.layer0(i)
+    }
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        self.0.contains(i) && self.1.contains(i)
     }
 }
 
@@ -55,6 +61,10 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
     fn layer0(&self, i: usize) -> usize {
         self.0.layer0(i) | self.1.layer0(i)
     }
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        self.0.contains(i) || self.1.contains(i)
+    }
 }
 
 /// `BitSetNot` takes a [`BitSetLike`] item, and produced an inverted virtual set.
@@ -80,6 +90,10 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     #[inline]
     fn layer0(&self, i: usize) -> usize {
         !self.0.layer0(i)
+    }
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        !self.0.contains(i)
     }
 }
 
@@ -112,6 +126,11 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
         let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
         xor.layer0(id)
     }
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1))).contains(i)
+    }
+
 }
 
 macro_rules! operator {

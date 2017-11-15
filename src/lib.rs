@@ -196,6 +196,9 @@ pub trait BitSetLike {
     /// each index of the set
     fn layer0(&self, i: usize) -> usize;
 
+    /// Allows checking if set bit is contained in the bit set.
+    fn contains(&self, i: Index) -> bool;
+
     /// Create an iterator that will scan over the keyspace
     fn iter(self) -> BitIter<Self>
         where Self: Sized
@@ -236,6 +239,11 @@ impl<'a, T> BitSetLike for &'a T
     fn layer0(&self, i: usize) -> usize {
         (*self).layer0(i)
     }
+
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        (*self).contains(i)
+    }
 }
 
 impl BitSetLike for BitSet {
@@ -257,6 +265,11 @@ impl BitSetLike for BitSet {
     #[inline]
     fn layer0(&self, i: usize) -> usize {
         self.layer0.get(i).map(|&x| x).unwrap_or(0)
+    }
+
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        self.contains(i)
     }
 }
 

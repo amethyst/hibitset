@@ -172,6 +172,10 @@ impl BitSetLike for AtomicBitSet {
             .map(|l0| l0[o0].load(Ordering::Relaxed))
             .unwrap_or(0)
     }
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        self.contains(i)
+    }
 }
 
 impl Default for AtomicBitSet {
