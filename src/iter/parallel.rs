@@ -44,34 +44,38 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
 {
     type Item = Index;
 
-    /// How splitting is done:
+    /// How the splitting is done:
     ///
-    /// 1) We find the highest layer that has at least one set bit.
+    /// 1) First the highest layer that has at least one set bit
+    ///    is searched.
     ///
-    /// 2) If the layer we find only has one set bit, we clear it
-    ///    and descend layer down.
+    /// 2) If the layer that was found only has one set bit,
+    ///    it's cleared, the correct prefix for the bit is figured
+    ///    out and descending is continued.
     ///
-    /// 3) If the layer has more than one set bit, we create mask
-    ///    that splits the bits of the layer in half so that
-    ///    both sides have half of the set bits.
-    ///    Then we mask the layer either by mask or it's complement,
-    ///    so that we can construct two distinct producers which we
-    ///    return.
+    /// 3) If the layer has more than one set bit, a mask is created
+    ///    that splits the set bits of the layer as close to half
+    ///    as possible.
+    ///    After that the layer is masked by either the mask or
+    ///    it's complement constructing two distinct producers which
+    ///    are then returned.
     ///
-    /// 4) If there isn't any layers that has more one set bit,
+    /// 4) If there isn't any layers that have more than one set bit,
     ///    splitting doesn't happen.
     ///
     /// The actual iteration is performed by the sequential iterator
-    /// `BitIter` which internals are set by this splitting algorithm.
+    /// `BitIter` which internals are modified by this splitting
+    ///  algorithm.
     ///
-    /// The splitting is only done in 3 highest levels of the bit set
-    /// so that the smallest unit of work possible is usize bits.
+    /// The splitting is only done for 3 highest levels of the bitset
+    /// and thus if all of the bits are set then the smallest possible unit
+    /// of work is `usize` bits.
     fn split(mut self) -> (Self, Option<Self>) {
         let other = {
             let mut handle_level = |level: usize| if self.0.masks[level] == 0 {
                 None
             } else {
-                // Top levels prefix is zero because it comes first
+                // Top levels prefix is zero because there is nothing before it
                 let level_prefix = self.0.prefix.get(level).cloned().unwrap_or(0);
                 let first_bit = self.0.masks[level].trailing_zeros();
                 average_ones(self.0.masks[level])
