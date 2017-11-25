@@ -87,12 +87,14 @@ pub fn average_ones(n: usize) -> Option<usize> {
 fn average_ones_u32(n: u32) -> Option<u32> {
     use std::num::Wrapping as W;
     let n = W(n);
+
+    // !0 / ((1 << (1 << n)) | 1)
     const PAR: [W<u32>; 5] = [
-        W(0x55555555),
-        W(0x33333333),
-        W(0x0F0F0F0F),
-        W(0x00FF00FF),
-        W(0x0000FFFF),
+        W(!0 / 0x3),
+        W(!0 / 0x5),
+        W(!0 / 0x11),
+        W(!0 / 0x101),
+        W(!0 / 0x10001)
     ];
 
     // Counting set bits in parallel
@@ -107,23 +109,24 @@ fn average_ones_u32(n: u32) -> Option<u32> {
     }
     let mut target = e / W(2);
 
-    // Branchless binary search
+    // Binary search
     let mut result = W(32);
     {
-        let mut descend = |child, to_bits, child_stride, child_mask| {
-            let diff = cur - target;
-            // If cur < target then result -= (256 >> to_bits)
-            result -= (diff & W(256)) >> to_bits;
-            // If cur < target then target -= t
-            target -= cur & (diff >> 8);
+        let mut descend = |child, child_stride, child_mask| {
+            let child_stride = W(child_stride as u32);
+            if cur < target {
+                result -= W(2) * child_stride;
+                target -= cur;
+            }
             // Descend to upper half or lower half
             // depending on are we over or under
-            cur = (child >> (result - W(child_stride)).0 as usize) & W(child_mask);
+            cur = (child >> (result - child_stride).0 as usize) & W(child_mask);
         };
-        descend(c, 4/*16*/,  8, 0b00001111);// PAR[3]
-        descend(b, 5/* 8*/,  4, 0b00000111);// PAR[2]
-        descend(a, 6/* 4*/,  2, 0b00000011);// PAR[1]
-        descend(n, 7/* 2*/,  1, 0b00000001);// PAR[0]
+        //(!PAR[n] & (PAR[n] + 1)) - 1
+        descend(c, 8, 16 - 1);// PAR[3]
+        descend(b, 4, 8 - 1);// PAR[2]
+        descend(a, 2, 4 - 1);// PAR[1]
+        descend(n, 1, 2 - 1);// PAR[0]
     }
     result -= (cur - target & W(256)) >> 8;
 
@@ -224,13 +227,15 @@ fn singleton_average_ones_u32() {
 fn average_ones_u64(n: u64) -> Option<u64> {
     use std::num::Wrapping as W;
     let n = W(n);
+
+    // !0 / ((1 << (1 << n)) | 1)
     const PAR: [W<u64>; 6] = [
-        W(0x5555555555555555),
-        W(0x3333333333333333),
-        W(0x0F0F0F0F0F0F0F0F),
-        W(0x00FF00FF00FF00FF),
-        W(0x0000FFFF0000FFFF),
-        W(0x00000000FFFFFFFF)
+        W(!0 / 0x3),
+        W(!0 / 0x5),
+        W(!0 / 0x11),
+        W(!0 / 0x101),
+        W(!0 / 0x10001),
+        W(!0 / 0x100000001)
     ];
 
     // Counting set bits in parallel
@@ -247,24 +252,25 @@ fn average_ones_u64(n: u64) -> Option<u64> {
 
     let mut target = f / W(2);
 
-    // Branchless binary search
+    // Binary search
     let mut result = W(64);
     {
-        let mut descend = |child, to_bits, child_stride, child_mask| {
-            let diff = cur - target;
-            // If cur < target then result -= (256 >> to_bits)
-            result -= (diff & W(256)) >> to_bits;
-            // If cur < target then target -= t
-            target -= cur & (diff >> 8);
+        let mut descend = |child, child_stride, child_mask| {
+            let child_stride = W(child_stride as u64);
+            if cur < target {
+                result -= W(2) * child_stride;
+                target -= cur;
+            }
             // Descend to upper half or lower half
             // depending on are we over or under
-            cur = (child >> (result - W(child_stride)).0 as usize) & W(child_mask);
+            cur = (child >> (result - child_stride).0 as usize) & W(child_mask);
         };
-        descend(d, 3/*32*/, 16, 0xFF);// PAR[4]
-        descend(c, 4/*16*/,  8, 0x0F);// PAR[3]
-        descend(b, 5/* 8*/,  4, 0x07);// PAR[2]
-        descend(a, 6/* 4*/,  2, 0x03);// PAR[1]
-        descend(n, 7/* 2*/,  1, 0x01);// PAR[0]
+        //(!PAR[n] & (PAR[n] + 1)) - 1
+        descend(d, 16, 256 - 1);// PAR[4]
+        descend(c,  8, 16 - 1);// PAR[3]
+        descend(b,  4, 8 - 1);// PAR[2]
+        descend(a,  2, 4 - 1);// PAR[1]
+        descend(n,  1, 2 - 1);// PAR[0]
     }
     result -= (cur - target & W(256)) >> 8;
 
