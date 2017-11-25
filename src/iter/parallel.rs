@@ -137,9 +137,11 @@ fn max_splitting_of_two_top_bits() {
         }
     }
 
+    let usize_bits = ::std::mem::size_of::<usize>() * 8;
+
     let mut c = ::BitSet::new();
-    for i in 0..524288 {
-        assert!(!c.add(i));
+    for i in 0..(usize_bits.pow(3) * 2) {
+        assert!(!c.add(i as u32));
     }
 
     let us = BitProducer((&c).iter());
@@ -148,7 +150,7 @@ fn max_splitting_of_two_top_bits() {
     let mut count = 0;
     visit(us, 2, 6, "u".to_owned(), &mut count);
     visit(them.expect("Splitting top level"), 2, 6, "t".to_owned(), &mut count);
-    assert_eq!(524288 / 64, count);
+    assert_eq!(usize_bits.pow(2) * 2, count);
 }
 
 /// Gets usize by layer and index from bit set.
