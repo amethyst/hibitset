@@ -87,12 +87,14 @@ pub fn average_ones(n: usize) -> Option<usize> {
 fn average_ones_u32(n: u32) -> Option<u32> {
     use std::num::Wrapping as W;
     let n = W(n);
+
+    // !0 / ((1 << (1 << n)) | 1)
     const PAR: [W<u32>; 5] = [
-        W(0x55555555),
-        W(0x33333333),
-        W(0x0F0F0F0F),
-        W(0x00FF00FF),
-        W(0x0000FFFF),
+        W(!0 / 0x3),
+        W(!0 / 0x5),
+        W(!0 / 0x11),
+        W(!0 / 0x101),
+        W(!0 / 0x10001)
     ];
 
     // Counting set bits in parallel
@@ -120,10 +122,10 @@ fn average_ones_u32(n: u32) -> Option<u32> {
             // depending on are we over or under
             cur = (child >> (result - child_stride).0 as usize) & W(child_mask);
         };
-        descend(c, 8, 0b00001111);// PAR[3]
-        descend(b, 4, 0b00000111);// PAR[2]
-        descend(a, 2, 0b00000011);// PAR[1]
-        descend(n, 1, 0b00000001);// PAR[0]
+        descend(c, 8, 0x0F);// PAR[3]
+        descend(b, 4, 0x07);// PAR[2]
+        descend(a, 2, 0x03);// PAR[1]
+        descend(n, 1, 0x01);// PAR[0]
     }
     result -= (cur - target & W(256)) >> 8;
 
@@ -224,13 +226,15 @@ fn singleton_average_ones_u32() {
 fn average_ones_u64(n: u64) -> Option<u64> {
     use std::num::Wrapping as W;
     let n = W(n);
+
+    // !0 / ((1 << (1 << n)) | 1)
     const PAR: [W<u64>; 6] = [
-        W(0x5555555555555555),
-        W(0x3333333333333333),
-        W(0x0F0F0F0F0F0F0F0F),
-        W(0x00FF00FF00FF00FF),
-        W(0x0000FFFF0000FFFF),
-        W(0x00000000FFFFFFFF)
+        W(!0 / 0x3),
+        W(!0 / 0x5),
+        W(!0 / 0x11),
+        W(!0 / 0x101),
+        W(!0 / 0x10001),
+        W(!0 / 0x100000001)
     ];
 
     // Counting set bits in parallel
