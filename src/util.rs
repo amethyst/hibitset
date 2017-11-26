@@ -74,10 +74,12 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 // Seems that this would need integer generics to do.
 pub fn average_ones(n: usize) -> Option<usize> {
     #[cfg(target_pointer_width = "64")]
-    average_ones_u64(n as u64).map(|n| n as usize)
+    let average = average_ones_u64(n as u64).map(|n| n as usize);
 
     #[cfg(target_pointer_width = "32")]
-    average_ones_u32(n as u32).map(|n| n as usize)
+    let average = average_ones_u32(n as u32).map(|n| n as usize);
+
+    average
 }
 
 #[allow(dead_code)]
@@ -128,96 +130,6 @@ fn average_ones_u32(n: u32) -> Option<u32> {
     result -= (cur - target & W(256)) >> 8;
 
     Some(result.0)
-}
-
-#[test]
-fn parity_0_average_ones_u32() {
-    struct EvenParity(u32);
-
-    impl Iterator for EvenParity {
-        type Item = u32;
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.0 == u32::max_value() {
-                return None;
-            }
-            self.0 += 1;
-            while self.0.count_ones() & 1 != 0 {
-                if self.0 == u32::max_value() {
-                    return None;
-                }
-                self.0 += 1;
-            }
-            Some(self.0)
-        }
-    }
-
-    let steps = 1000;
-    for i in 0..steps {
-        let pos = i * (u32::max_value() / steps);
-        for i in EvenParity(pos).take(steps as usize) {
-            let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
-            assert_eq!(
-                (i & mask).count_ones(),
-                (i & !mask).count_ones(),
-                "{}", i
-            );
-        }
-    }
-}
-
-#[test]
-fn parity_1_average_ones_u32() {
-    struct OddParity(u32);
-
-    impl Iterator for OddParity {
-        type Item = u32;
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.0 == u32::max_value() {
-                return None;
-            }
-            self.0 += 1;
-            while self.0.count_ones() & 1 == 0 {
-                if self.0 == u32::max_value() {
-                    return None;
-                }
-                self.0 += 1;
-            }
-            Some(self.0)
-        }
-    }
-
-    let steps = 1000;
-    for i in 0..steps {
-        let pos = i * (u32::max_value() / steps);
-        for i in OddParity(pos).take(steps as usize) {
-            let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
-            let a = (i & mask).count_ones();
-            let b = (i & !mask).count_ones();
-            if a < b {
-                assert_eq!(a + 1, b, "{:x}", i);
-            } else if b < a{
-                assert_eq!(a, b + 1, "{:x}", i);
-            } else {
-                panic!("Odd parity shouldn't split in exactly half");
-            }
-        }
-    }
-}
-
-#[test]
-fn empty_average_ones_u32() {
-    assert_eq!(None, average_ones_u32(0));
-}
-
-#[test]
-fn singleton_average_ones_u32() {
-    for i in 0..32 {
-        assert_eq!(
-            None,
-            average_ones_u32(1 << i),
-            "{:x}", i
-        );
-    }
 }
 
 #[allow(dead_code)]
@@ -274,107 +186,201 @@ fn average_ones_u64(n: u64) -> Option<u64> {
     Some(result.0)
 }
 
-#[test]
-fn parity_0_average_ones_u64() {
-    struct EvenParity(u64);
+#[cfg(test)]
+mod test_average_ones {
+    use super::*;
+    #[test]
+    fn parity_0_average_ones_u32() {
+        struct EvenParity(u32);
 
-    impl Iterator for EvenParity {
-        type Item = u64;
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.0 == u64::max_value() {
-                return None;
-            }
-            self.0 += 1;
-            while self.0.count_ones() & 1 != 0 {
-                if self.0 == u64::max_value() {
+        impl Iterator for EvenParity {
+            type Item = u32;
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.0 == u32::max_value() {
                     return None;
                 }
                 self.0 += 1;
+                while self.0.count_ones() & 1 != 0 {
+                    if self.0 == u32::max_value() {
+                        return None;
+                    }
+                    self.0 += 1;
+                }
+                Some(self.0)
             }
-            Some(self.0)
+        }
+
+        let steps = 1000;
+        for i in 0..steps {
+            let pos = i * (u32::max_value() / steps);
+            for i in EvenParity(pos).take(steps as usize) {
+                let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
+                assert_eq!(
+                    (i & mask).count_ones(),
+                    (i & !mask).count_ones(),
+                    "{}", i
+                );
+            }
         }
     }
 
-    let steps = 1000;
-    for i in 0..steps {
-        let pos = i * (u64::max_value() / steps);
-        for i in EvenParity(pos).take(steps as usize) {
-            let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
-            assert_eq!(
-                (i & mask).count_ones(),
-                (i & !mask).count_ones(),
-                "{}", i
-            );
-        }
-    }
-}
+    #[test]
+    fn parity_1_average_ones_u32() {
+        struct OddParity(u32);
 
-#[test]
-fn parity_1_average_ones_u64() {
-    struct OddParity(u64);
-
-    impl Iterator for OddParity {
-        type Item = u64;
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.0 == u64::max_value() {
-                return None;
-            }
-            self.0 += 1;
-            while self.0.count_ones() & 1 == 0 {
-                if self.0 == u64::max_value() {
+        impl Iterator for OddParity {
+            type Item = u32;
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.0 == u32::max_value() {
                     return None;
                 }
                 self.0 += 1;
+                while self.0.count_ones() & 1 == 0 {
+                    if self.0 == u32::max_value() {
+                        return None;
+                    }
+                    self.0 += 1;
+                }
+                Some(self.0)
             }
-            Some(self.0)
+        }
+
+        let steps = 1000;
+        for i in 0..steps {
+            let pos = i * (u32::max_value() / steps);
+            for i in OddParity(pos).take(steps as usize) {
+                let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
+                let a = (i & mask).count_ones();
+                let b = (i & !mask).count_ones();
+                if a < b {
+                    assert_eq!(a + 1, b, "{:x}", i);
+                } else if b < a{
+                    assert_eq!(a, b + 1, "{:x}", i);
+                } else {
+                    panic!("Odd parity shouldn't split in exactly half");
+                }
+            }
         }
     }
 
-    let steps = 1000;
-    for i in 0..steps {
-        let pos = i * (u64::max_value() / steps);
-        for i in OddParity(pos).take(steps as usize) {
-            let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
-            let a = (i & mask).count_ones();
-            let b = (i & !mask).count_ones();
-            if a < b {
-                assert_eq!(a + 1, b, "{:x}", i);
-            } else if b < a{
-                assert_eq!(a, b + 1, "{:x}", i);
-            } else {
-                panic!("Odd parity shouldn't split in exactly half");
-            }
-        }
+    #[test]
+    fn empty_average_ones_u32() {
+        assert_eq!(None, average_ones_u32(0));
     }
-}
 
-#[test]
-fn empty_average_ones_u64() {
-    assert_eq!(None, average_ones_u64(0));
-}
-
-#[test]
-fn singleton_average_ones_u64() {
-    for i in 0..64 {
-        assert_eq!(
-            None,
-            average_ones_u64(1 << i),
-            "{:x}", i
-        );
-    }
-}
-
-#[test]
-fn average_ones_agree_u32_u64() {
-    let steps = 1000;
-    for i in 0..steps {
-        let pos = i * (u32::max_value() / steps);
-        for i in pos..steps {
+    #[test]
+    fn singleton_average_ones_u32() {
+        for i in 0..32 {
             assert_eq!(
-                average_ones_u32(i),
-                average_ones_u64(i as u64).map(|n| n as u32),
+                None,
+                average_ones_u32(1 << i),
                 "{:x}", i
             );
+        }
+    }
+
+    #[test]
+    fn parity_0_average_ones_u64() {
+        struct EvenParity(u64);
+
+        impl Iterator for EvenParity {
+            type Item = u64;
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.0 == u64::max_value() {
+                    return None;
+                }
+                self.0 += 1;
+                while self.0.count_ones() & 1 != 0 {
+                    if self.0 == u64::max_value() {
+                        return None;
+                    }
+                    self.0 += 1;
+                }
+                Some(self.0)
+            }
+        }
+
+        let steps = 1000;
+        for i in 0..steps {
+            let pos = i * (u64::max_value() / steps);
+            for i in EvenParity(pos).take(steps as usize) {
+                let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
+                assert_eq!(
+                    (i & mask).count_ones(),
+                    (i & !mask).count_ones(),
+                    "{}", i
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn parity_1_average_ones_u64() {
+        struct OddParity(u64);
+
+        impl Iterator for OddParity {
+            type Item = u64;
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.0 == u64::max_value() {
+                    return None;
+                }
+                self.0 += 1;
+                while self.0.count_ones() & 1 == 0 {
+                    if self.0 == u64::max_value() {
+                        return None;
+                    }
+                    self.0 += 1;
+                }
+                Some(self.0)
+            }
+        }
+
+        let steps = 1000;
+        for i in 0..steps {
+            let pos = i * (u64::max_value() / steps);
+            for i in OddParity(pos).take(steps as usize) {
+                let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
+                let a = (i & mask).count_ones();
+                let b = (i & !mask).count_ones();
+                if a < b {
+                    assert_eq!(a + 1, b, "{:x}", i);
+                } else if b < a{
+                    assert_eq!(a, b + 1, "{:x}", i);
+                } else {
+                    panic!("Odd parity shouldn't split in exactly half");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn empty_average_ones_u64() {
+        assert_eq!(None, average_ones_u64(0));
+    }
+
+    #[test]
+    fn singleton_average_ones_u64() {
+        for i in 0..64 {
+            assert_eq!(
+                None,
+                average_ones_u64(1 << i),
+                "{:x}", i
+            );
+        }
+    }
+
+    #[test]
+    fn average_ones_agree_u32_u64() {
+        let steps = 1000;
+        for i in 0..steps {
+            let pos = i * (u32::max_value() / steps);
+            for i in pos..steps {
+                assert_eq!(
+                    average_ones_u32(i),
+                    average_ones_u64(i as u64).map(|n| n as u32),
+                    "{:x}", i
+                );
+            }
         }
     }
 }
