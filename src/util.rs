@@ -109,7 +109,7 @@ fn average_ones_u32(n: u32) -> Option<u32> {
     }
     let mut target = e / W(2);
 
-    // Branchless binary search
+    // Binary search
     let mut result = W(32);
     {
         let mut descend = |child, child_stride, child_mask| {
@@ -122,10 +122,11 @@ fn average_ones_u32(n: u32) -> Option<u32> {
             // depending on are we over or under
             cur = (child >> (result - child_stride).0 as usize) & W(child_mask);
         };
-        descend(c, 8, 0x0F);// PAR[3]
-        descend(b, 4, 0x07);// PAR[2]
-        descend(a, 2, 0x03);// PAR[1]
-        descend(n, 1, 0x01);// PAR[0]
+        //(!PAR[n] & (PAR[n] + 1)) - 1
+        descend(c, 8, 16 - 1);// PAR[3]
+        descend(b, 4, 8 - 1);// PAR[2]
+        descend(a, 2, 4 - 1);// PAR[1]
+        descend(n, 1, 2 - 1);// PAR[0]
     }
     result -= (cur - target & W(256)) >> 8;
 
@@ -251,7 +252,7 @@ fn average_ones_u64(n: u64) -> Option<u64> {
 
     let mut target = f / W(2);
 
-    // Branchless binary search
+    // Binary search
     let mut result = W(64);
     {
         let mut descend = |child, child_stride, child_mask| {
@@ -264,11 +265,12 @@ fn average_ones_u64(n: u64) -> Option<u64> {
             // depending on are we over or under
             cur = (child >> (result - child_stride).0 as usize) & W(child_mask);
         };
-        descend(d, 16, 0xFF);// PAR[4]
-        descend(c,  8, 0x0F);// PAR[3]
-        descend(b,  4, 0x07);// PAR[2]
-        descend(a,  2, 0x03);// PAR[1]
-        descend(n,  1, 0x01);// PAR[0]
+        //(!PAR[n] & (PAR[n] + 1)) - 1
+        descend(d, 16, 256 - 1);// PAR[4]
+        descend(c,  8, 16 - 1);// PAR[3]
+        descend(b,  4, 8 - 1);// PAR[2]
+        descend(a,  2, 4 - 1);// PAR[1]
+        descend(n,  1, 2 - 1);// PAR[0]
     }
     result -= (cur - target & W(256)) >> 8;
 
