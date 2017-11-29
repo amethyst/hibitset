@@ -80,11 +80,13 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 let first_bit = self.0.masks[level].trailing_zeros();
                 average_ones(self.0.masks[level])
                     .and_then(|average_bit| {
-                        let mask = (1 << (average_bit - 1)) - 1;
+                        let mask = (1 << average_bit) - 1;
                         let mut other = BitProducer(BitIter::new(self.0.set, [0; 4], [0; 3]));
                         // `other` is the more significant half of the mask
                         other.0.masks[level] = self.0.masks[level] & !mask;
                         other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
+                        // Upper portion prefix is maintained, because `other`
+                        // will iterate the same subtree as `self`
                         other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
                         // And `self` is the less significant one
                         self.0.masks[level] &= mask;
@@ -94,6 +96,8 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                         // Because there is only one bit left we descend to it
                         let idx = level_prefix as usize | first_bit as usize;
                         self.0.prefix[level - 1] = (idx as u32) << BITS;
+                        // The level that is descended from doesn't have anything
+                        // interesting so it can be skipped in future.
                         self.0.masks[level] = 0;
                         self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
                         None
@@ -135,8 +139,8 @@ mod test_bit_producer {
     fn max_splitting_of_two_top_bits() {
         fn visit<T>(mut us: BitProducer<T>, d: usize, i: usize, mut trail: String, c: &mut usize)
             where T: Send +
-                    Sync +
-                    BitSetLike
+                     Sync +
+                     BitSetLike
         {
             if d == 0 {
                 assert!(us.split().1.is_none());
