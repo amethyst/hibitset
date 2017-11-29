@@ -65,8 +65,8 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 /// ````rust,ignore
 /// use hibitset::util::average_ones;
 ///
-/// assert_eq!(Some(3), average_ones(0b10110));
-/// assert_eq!(Some(6), average_ones(0b100010));
+/// assert_eq!(Some(4), average_ones(0b10110));
+/// assert_eq!(Some(5), average_ones(0b100010));
 /// assert_eq!(None, average_ones(0));
 /// assert_eq!(None, average_ones(1));
 /// ````
@@ -82,7 +82,7 @@ pub fn average_ones(n: usize) -> Option<usize> {
     average
 }
 
-#[allow(dead_code)]
+#[cfg(any(test, target_pointer_width = "32"))]
 fn average_ones_u32(n: u32) -> Option<u32> {
     use std::num::Wrapping as W;
     let n = W(n);
@@ -127,12 +127,14 @@ fn average_ones_u32(n: u32) -> Option<u32> {
         descend(a, 2, 4 - 1);// PAR[1]
         descend(n, 1, 2 - 1);// PAR[0]
     }
-    result -= (cur - target & W(256)) >> 8;
+    if cur < target {
+        result -= W(1);
+    }
 
-    Some(result.0)
+    Some(result.0 - 1)
 }
 
-#[allow(dead_code)]
+#[cfg(any(test, target_pointer_width = "64"))]
 fn average_ones_u64(n: u64) -> Option<u64> {
     use std::num::Wrapping as W;
     let n = W(n);
@@ -181,9 +183,11 @@ fn average_ones_u64(n: u64) -> Option<u64> {
         descend(a,  2, 4 - 1);// PAR[1]
         descend(n,  1, 2 - 1);// PAR[0]
     }
-    result -= (cur - target & W(256)) >> 8;
+    if cur < target {
+        result -= W(1);
+    }
 
-    Some(result.0)
+    Some(result.0 - 1)
 }
 
 #[cfg(test)]
@@ -214,7 +218,7 @@ mod test_average_ones {
         for i in 0..steps {
             let pos = i * (u32::max_value() / steps);
             for i in EvenParity(pos).take(steps as usize) {
-                let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
+                let mask = (1 << average_ones_u32(i).unwrap_or(31)) - 1;
                 assert_eq!(
                     (i & mask).count_ones(),
                     (i & !mask).count_ones(),
@@ -249,7 +253,7 @@ mod test_average_ones {
         for i in 0..steps {
             let pos = i * (u32::max_value() / steps);
             for i in OddParity(pos).take(steps as usize) {
-                let mask = (1 << (average_ones_u32(i).unwrap_or(32) - 1)) - 1;
+                let mask = (1 << average_ones_u32(i).unwrap_or(31)) - 1;
                 let a = (i & mask).count_ones();
                 let b = (i & !mask).count_ones();
                 if a < b {
@@ -304,7 +308,7 @@ mod test_average_ones {
         for i in 0..steps {
             let pos = i * (u64::max_value() / steps);
             for i in EvenParity(pos).take(steps as usize) {
-                let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
+                let mask = (1 << average_ones_u64(i).unwrap_or(63)) - 1;
                 assert_eq!(
                     (i & mask).count_ones(),
                     (i & !mask).count_ones(),
@@ -339,7 +343,7 @@ mod test_average_ones {
         for i in 0..steps {
             let pos = i * (u64::max_value() / steps);
             for i in OddParity(pos).take(steps as usize) {
-                let mask = (1 << (average_ones_u64(i).unwrap_or(64) - 1)) - 1;
+                let mask = (1 << average_ones_u64(i).unwrap_or(63)) - 1;
                 let a = (i & mask).count_ones();
                 let b = (i & !mask).count_ones();
                 if a < b {
@@ -382,5 +386,13 @@ mod test_average_ones {
                 );
             }
         }
+    }
+
+    #[test]
+    fn specific_values() {
+        assert_eq!(Some(4), average_ones(0b10110));
+        assert_eq!(Some(5), average_ones(0b100010));
+        assert_eq!(None, average_ones(0));
+        assert_eq!(None, average_ones(1));
     }
 }
