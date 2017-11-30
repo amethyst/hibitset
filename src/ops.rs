@@ -1,9 +1,9 @@
 
 use std::ops::{BitAnd, BitOr, BitXor, Not};
 
-use {BitIter, BitSet, BitSetLike};
-
 use util::*;
+
+use {AtomicBitSet, BitIter, BitSet, BitSetLike};
 
 /// `BitSetAnd` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an intersection of the
@@ -189,6 +189,8 @@ macro_rules! operator {
 
 operator!(impl<()()> for BitSet);
 operator!(impl<('a)()> for &'a BitSet);
+operator!(impl<()()> for AtomicBitSet);
+operator!(impl<('a)()> for &'a AtomicBitSet);
 operator!(impl<()(A)> for BitSetNot<A>);
 operator!(impl<('a)(A)> for &'a BitSetNot<A>);
 operator!(impl<()(A, B)> for BitSetAnd<A, B>);
