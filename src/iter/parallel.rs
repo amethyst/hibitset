@@ -133,6 +133,7 @@ mod test_bit_producer {
 
     use super::BitProducer;
     use iter::BitSetLike;
+    use util::BITS;
 
     #[test]
     fn max_splitting_of_two_top_bits() {
@@ -142,7 +143,7 @@ mod test_bit_producer {
                      BitSetLike
         {
             if d == 0 {
-                assert!(us.split().1.is_none());
+                assert!(us.split().1.is_none(), trail);
                 *c += 1;
             } else {
                 for j in 1..(i + 1) {
@@ -154,9 +155,11 @@ mod test_bit_producer {
                     visit(them, d, i - j, trail, c);
                 }
                 trail.push_str("u");
-                visit(us, d - 1, 6, trail, c);
+                visit(us, d - 1, BITS, trail, c);
             }
         }
+
+        let split_levels = 2;
 
         let usize_bits = ::std::mem::size_of::<usize>() * 8;
 
@@ -169,8 +172,8 @@ mod test_bit_producer {
         let (us, them) = us.split();
 
         let mut count = 0;
-        visit(us, 2, 6, "u".to_owned(), &mut count);
-        visit(them.expect("Splitting top level"), 2, 6, "t".to_owned(), &mut count);
-        assert_eq!(usize_bits.pow(2) * 2, count);
+        visit(us, split_levels as usize - 1, BITS, "u".to_owned(), &mut count);
+        visit(them.expect("Splitting top level"), split_levels as usize - 1, BITS, "t".to_owned(), &mut count);
+        assert_eq!(usize_bits.pow(split_levels - 1) * 2, count);
     }
 }
