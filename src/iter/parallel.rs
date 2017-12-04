@@ -8,15 +8,42 @@ use util::average_ones;
 ///
 /// [`BitSetLike`]: ../../trait.BitSetLike.html
 #[derive(Debug)]
-pub struct BitParIter<T>(T);
+pub struct BitParIter<T>(T, u8);
 
 impl<T> BitParIter<T> {
     /// Creates a new `BitParIter`. You usually don't call this function
     /// but just [`.par_iter()`] on a bit set.
     ///
+    /// Default layer split amount is 3.
+    ///
     /// [`.par_iter()`]: ../../trait.BitSetLike.html#method.par_iter
     pub fn new(set: T) -> Self {
-        BitParIter(set)
+        BitParIter(set, 3)
+    }
+
+    /// Sets how many layers are split when forking.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate rayon;
+    /// # extern crate hibitset;
+    /// # use hibitset::{BitSet, BitSetLike};
+    /// # use rayon::iter::ParallelIterator;
+    /// # fn main() {
+    /// let mut bitset = BitSet::new();
+    /// bitset.par_iter()
+    ///     .layers_split(2)
+    ///     .count();
+    /// # }
+    /// ```
+    ///
+    /// The value should be in range [1, 3]
+    pub fn layers_split(mut self, layers: u8) -> Self {
+        assert!(layers >= 1);
+        assert!(layers <= 3);
+        self.1 = layers;
+        self
     }
 }
 
@@ -28,7 +55,7 @@ impl<T> ParallelIterator for BitParIter<T>
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
         where C: UnindexedConsumer<Self::Item>
     {
-        bridge_unindexed(BitProducer((&self.0).iter()), consumer)
+        bridge_unindexed(BitProducer((&self.0).iter(), self.1), consumer)
     }
 }
 
@@ -37,7 +64,7 @@ impl<T> ParallelIterator for BitParIter<T>
 ///
 /// Usually used internally by `BitParIter`.
 #[derive(Debug)]
-pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>);
+pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>, u8);
 
 impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     where T: BitSetLike
@@ -49,7 +76,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     /// 1) First the highest layer that has at least one set bit
     ///    is searched.
     ///
-    /// 2) If the layer that was found only has one set bit,
+    /// 2) If the layer that was found has only one set bit,
     ///    it's cleared, the correct prefix for the bit is figured
     ///    out and descending is continued.
     ///
@@ -71,6 +98,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     /// and thus if all of the bits are set then the smallest possible unit
     /// of work is `usize` bits.
     fn split(mut self) -> (Self, Option<Self>) {
+        let splits = self.1;
         let other = {
             let mut handle_level = |level: usize| if self.0.masks[level] == 0 {
                 None
@@ -81,7 +109,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 average_ones(self.0.masks[level])
                     .and_then(|average_bit| {
                         let mask = (1 << average_bit) - 1;
-                        let mut other = BitProducer(BitIter::new(self.0.set, [0; 4], [0; 3]));
+                        let mut other = BitProducer(BitIter::new(self.0.set, [0; 4], [0; 3]), splits);
                         // `other` is the more significant half of the mask
                         other.0.masks[level] = self.0.masks[level] & !mask;
                         other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
@@ -103,9 +131,14 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                         None
                     })
             };
-            handle_level(3)
-                .or_else(|| handle_level(2))
-                .or_else(|| handle_level(1))
+            let mut h = handle_level(3);
+            if splits > 1 {
+                h = h.or_else(|| handle_level(2));
+            }
+            if splits == 3 {
+                h = h.or_else(|| handle_level(1));
+            }
+            h
         };
         (self, other)
     }
@@ -134,16 +167,16 @@ mod test_bit_producer {
 
     use super::BitProducer;
     use iter::BitSetLike;
+    use util::BITS;
 
-    #[test]
-    fn max_splitting_of_two_top_bits() {
+    fn test_splitting(split_levels: u8) {
         fn visit<T>(mut us: BitProducer<T>, d: usize, i: usize, mut trail: String, c: &mut usize)
             where T: Send +
                      Sync +
                      BitSetLike
         {
             if d == 0 {
-                assert!(us.split().1.is_none());
+                assert!(us.split().1.is_none(), trail);
                 *c += 1;
             } else {
                 for j in 1..(i + 1) {
@@ -155,7 +188,7 @@ mod test_bit_producer {
                     visit(them, d, i - j, trail, c);
                 }
                 trail.push_str("u");
-                visit(us, d - 1, 6, trail, c);
+                visit(us, d - 1, BITS, trail, c);
             }
         }
 
@@ -166,12 +199,27 @@ mod test_bit_producer {
             assert!(!c.add(i as u32));
         }
 
-        let us = BitProducer((&c).iter());
+        let us = BitProducer((&c).iter(), split_levels);
         let (us, them) = us.split();
 
         let mut count = 0;
-        visit(us, 2, 6, "u".to_owned(), &mut count);
-        visit(them.expect("Splitting top level"), 2, 6, "t".to_owned(), &mut count);
-        assert_eq!(usize_bits.pow(2) * 2, count);
+        visit(us, split_levels as usize - 1, BITS, "u".to_owned(), &mut count);
+        visit(them.expect("Splitting top level"), split_levels as usize - 1, BITS, "t".to_owned(), &mut count);
+        assert_eq!(usize_bits.pow(split_levels as u32 - 1) * 2, count);
+    }
+
+    #[test]
+    fn max_3_splitting_of_two_top_bits() {
+        test_splitting(3);
+    }
+
+    #[test]
+    fn max_2_splitting_of_two_top_bits() {
+        test_splitting(2);
+    }
+
+    #[test]
+    fn max_1_splitting_of_two_top_bits() {
+        test_splitting(1);
     }
 }
