@@ -67,9 +67,9 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     /// `BitIter` which internals are modified by this splitting
     ///  algorithm.
     ///
-    /// The splitting is only done for 2 highest levels of the bitset
+    /// The splitting is only done for 3 highest levels of the bitset
     /// and thus if all of the bits are set then the smallest possible unit
-    /// of work is `usize`^2 bits.
+    /// of work is `usize` bits.
     fn split(mut self) -> (Self, Option<Self>) {
         let other = {
             let mut handle_level = |level: usize| if self.0.masks[level] == 0 {
@@ -105,6 +105,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
             };
             handle_level(3)
                 .or_else(|| handle_level(2))
+                .or_else(|| handle_level(1))
         };
         (self, other)
     }
@@ -159,7 +160,7 @@ mod test_bit_producer {
             }
         }
 
-        let split_levels = 2;
+        let split_levels = 3;
 
         let usize_bits = ::std::mem::size_of::<usize>() * 8;
 
