@@ -202,50 +202,50 @@ operator!(impl<()(A, B)> for BitSetXor<A, B>);
 operator!(impl<('a)(A, B)> for &'a BitSetXor<A, B>);
 
 macro_rules! iterator {
-    ( $index:ty, $bitset:ident ) => {
-        impl FromIterator<$index> for $bitset {
+    ( $bitset:ident ) => {
+        impl FromIterator<Index> for $bitset {
             fn from_iter<T>(iter: T) -> Self
             where
-                T: IntoIterator<Item = $index>,
+                T: IntoIterator<Item = Index>,
             {
                 let mut bitset = $bitset::new();
-                for item in iter.into_iter() {
+                for item in iter {
                     bitset.add(item);
                 }
                 bitset
             }
         }
         
-        impl<'a> FromIterator<&'a $index> for $bitset {
+        impl<'a> FromIterator<&'a Index> for $bitset {
             fn from_iter<T>(iter: T) -> Self
             where
-                T: IntoIterator<Item = &'a $index>,
+                T: IntoIterator<Item = &'a Index>,
             {
                 let mut bitset = $bitset::new();
-                for item in iter.into_iter() {
+                for item in iter {
                     bitset.add(*item);
                 }
                 bitset
             }
         }
 
-        impl Extend<$index> for $bitset {
+        impl Extend<Index> for $bitset {
             fn extend<T>(&mut self, iter: T)
             where
-                T: IntoIterator<Item = $index>,
+                T: IntoIterator<Item = Index>,
             {
-                for item in iter.into_iter() {
+                for item in iter {
                     self.add(item);
                 }
             }
         }
 
-        impl<'a> Extend<&'a $index> for $bitset {
+        impl<'a> Extend<&'a Index> for $bitset {
             fn extend<T>(&mut self, iter: T)
             where
-                T: IntoIterator<Item = &'a $index>,
+                T: IntoIterator<Item = &'a Index>,
             {
-                for item in iter.into_iter() {
+                for item in iter {
                     self.add(*item);
                 }
             }
@@ -254,8 +254,8 @@ macro_rules! iterator {
 
 }
 
-iterator!( Index, BitSet);
-iterator!( Index, AtomicBitSet);
+iterator!(BitSet);
+iterator!(AtomicBitSet);
 
 #[cfg(test)]
 mod tests {
