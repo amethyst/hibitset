@@ -1,5 +1,6 @@
 
 use std::ops::{BitAnd, BitOr, BitXor, Not};
+use std::iter::{FromIterator, IntoIterator};
 
 use util::*;
 
@@ -199,6 +200,62 @@ operator!(impl<()(A, B)> for BitSetOr<A, B>);
 operator!(impl<('a)(A, B)> for &'a BitSetOr<A, B>);
 operator!(impl<()(A, B)> for BitSetXor<A, B>);
 operator!(impl<('a)(A, B)> for &'a BitSetXor<A, B>);
+
+macro_rules! iterator {
+    ( $bitset:ident ) => {
+        impl FromIterator<Index> for $bitset {
+            fn from_iter<T>(iter: T) -> Self
+            where
+                T: IntoIterator<Item = Index>,
+            {
+                let mut bitset = $bitset::new();
+                for item in iter {
+                    bitset.add(item);
+                }
+                bitset
+            }
+        }
+        
+        impl<'a> FromIterator<&'a Index> for $bitset {
+            fn from_iter<T>(iter: T) -> Self
+            where
+                T: IntoIterator<Item = &'a Index>,
+            {
+                let mut bitset = $bitset::new();
+                for item in iter {
+                    bitset.add(*item);
+                }
+                bitset
+            }
+        }
+
+        impl Extend<Index> for $bitset {
+            fn extend<T>(&mut self, iter: T)
+            where
+                T: IntoIterator<Item = Index>,
+            {
+                for item in iter {
+                    self.add(item);
+                }
+            }
+        }
+
+        impl<'a> Extend<&'a Index> for $bitset {
+            fn extend<T>(&mut self, iter: T)
+            where
+                T: IntoIterator<Item = &'a Index>,
+            {
+                for item in iter {
+                    self.add(*item);
+                }
+            }
+        }
+    };
+
+}
+
+iterator!(BitSet);
+iterator!(AtomicBitSet);
 
 #[cfg(test)]
 mod tests {
