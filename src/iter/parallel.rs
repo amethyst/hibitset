@@ -1,7 +1,7 @@
 use rayon::iter::ParallelIterator;
 use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
-use iter::{BITS, BitSetLike, BitIter, Index};
+use iter::{BITS, LAYERS, BitSetLike, BitIter, Index};
 use util::average_ones;
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
@@ -39,6 +39,13 @@ impl<T> BitParIter<T> {
     /// ```
     ///
     /// The value should be in range [1, 3]
+    ///
+    /// | splits | largest smallest unit of work |
+    /// |--------|-------------------------------|
+    /// | 1      | usize_bits<sup>3</sup>        |
+    /// | 2      | usize_bits<sup>2</sup>        |
+    /// | 3      | usize_bits                    |
+    ///
     pub fn layers_split(mut self, layers: u8) -> Self {
         assert!(layers >= 1);
         assert!(layers <= 3);
@@ -76,15 +83,15 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     /// 1) First the highest layer that has at least one set bit
     ///    is searched.
     ///
-    /// 2) If the layer that was found has only one set bit,
-    ///    it's cleared, the correct prefix for the bit is figured
-    ///    out and descending is continued.
+    /// 2) If the layer that was found, has only one bit that's set,
+    ///    it's cleared. After that the correct prefix for the cleared
+    ///    bit is figured out and the descending is continued.
     ///
-    /// 3) If the layer has more than one set bit, a mask is created
-    ///    that splits the set bits of the layer as close to half
+    /// 3) If the layer that was found, has more than one bit that's set,
+    ///    a mask is created that splits it's set bits as close to half
     ///    as possible.
-    ///    After that the layer is masked by either the mask or
-    ///    it's complement constructing two distinct producers which
+    ///    After creating the mask the layer is masked by either the mask
+    ///    or it's complement constructing two distinct producers which
     ///    are then returned.
     ///
     /// 4) If there isn't any layers that have more than one set bit,
@@ -94,13 +101,16 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     /// `BitIter` which internals are modified by this splitting
     ///  algorithm.
     ///
-    /// The splitting is only done for 3 highest levels of the bitset
-    /// and thus if all of the bits are set then the smallest possible unit
-    /// of work is `usize` bits.
+    /// This splitting strategy should split work evenly if the set bits
+    /// are distributed close to uniformly random.
+    /// As the strategy only looks one layer at the time, if there are subtrees
+    /// that have lots of work and sibling subtrees that have little of work,
+    /// then it will produce non-optimal splittings.
     fn split(mut self) -> (Self, Option<Self>) {
         let splits = self.1;
         let other = {
             let mut handle_level = |level: usize| if self.0.masks[level] == 0 {
+                // Skip the empty layers
                 None
             } else {
                 // Top levels prefix is zero because there is nothing before it
@@ -110,13 +120,13 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                     .and_then(|average_bit| {
                         let mask = (1 << average_bit) - 1;
                         let mut other = BitProducer(BitIter::new(self.0.set, [0; 4], [0; 3]), splits);
-                        // `other` is the more significant half of the mask
+                        // The `other` is the more significant half of the mask
                         other.0.masks[level] = self.0.masks[level] & !mask;
                         other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
-                        // Upper portion prefix is maintained, because `other`
-                        // will iterate the same subtree as `self`
+                        // The upper portion of the prefix is maintained, because the `other`
+                        // will iterate the same subtree as the `self` does
                         other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
-                        // And `self` is the less significant one
+                        // And the `self` is the less significant one
                         self.0.masks[level] &= mask;
                         self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
                         Some(other)
@@ -125,18 +135,16 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                         let idx = level_prefix as usize | first_bit as usize;
                         self.0.prefix[level - 1] = (idx as u32) << BITS;
                         // The level that is descended from doesn't have anything
-                        // interesting so it can be skipped in future.
+                        // interesting so it can be skipped in the future.
                         self.0.masks[level] = 0;
                         self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
                         None
                     })
             };
-            let mut h = handle_level(3);
-            if splits > 1 {
-                h = h.or_else(|| handle_level(2));
-            }
-            if splits == 3 {
-                h = h.or_else(|| handle_level(1));
+            let top_layer = LAYERS - 1;
+            let mut h = handle_level(top_layer);
+            for i in 1..splits {
+                h = h.or_else(|| handle_level(top_layer - i as usize));
             }
             h
         };
@@ -150,14 +158,14 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     }
 }
 
-/// Gets usize by layer and index from bit set.
+/// Gets usize by a layer and an index from the bitset.
 fn get_from_layer<T: BitSetLike>(set: &T, layer: usize, idx: usize) -> usize {
     match layer {
         0 => set.layer0(idx),
         1 => set.layer1(idx),
         2 => set.layer2(idx),
         3 => set.layer3(),
-        _ => unreachable!("Invalid layer {}", layer),
+        _ => panic!("Invalid layer {}", layer),
     }
 }
 

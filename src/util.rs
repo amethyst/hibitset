@@ -84,16 +84,13 @@ pub fn average_ones(n: usize) -> Option<usize> {
 
 #[cfg(any(test, target_pointer_width = "32"))]
 fn average_ones_u32(n: u32) -> Option<u32> {
-    use std::num::Wrapping as W;
-    let n = W(n);
-
     // !0 / ((1 << (1 << n)) | 1)
-    const PAR: [W<u32>; 5] = [
-        W(!0 / 0x3),
-        W(!0 / 0x5),
-        W(!0 / 0x11),
-        W(!0 / 0x101),
-        W(!0 / 0x10001)
+    const PAR: [u32; 5] = [
+        !0 / 0x3,
+        !0 / 0x5,
+        !0 / 0x11,
+        !0 / 0x101,
+        !0 / 0x10001
     ];
 
     // Counting set bits in parallel
@@ -102,24 +99,25 @@ fn average_ones_u32(n: u32) -> Option<u32> {
     let c = (b + (b >> 4)) & PAR[2];
     let d = (c + (c >> 8)) & PAR[3];
     let mut cur = d >> 16;
-    let e = (d + cur) & PAR[4];
-    if e <= W(1) {
+    let count = (d + cur) & PAR[4];
+    if count <= 1 {
         return None;
     }
-    let mut target = e / W(2);
+
+    // Amount of set bits that are wanted for both sides
+    let mut target = count / 2;
 
     // Binary search
-    let mut result = W(32);
+    let mut result = 32;
     {
         let mut descend = |child, child_stride, child_mask| {
-            let child_stride = W(child_stride as u32);
             if cur < target {
-                result -= W(2) * child_stride;
+                result -= 2 * child_stride;
                 target -= cur;
             }
             // Descend to upper half or lower half
             // depending on are we over or under
-            cur = (child >> (result - child_stride).0 as usize) & W(child_mask);
+            cur = (child >> (result - child_stride)) & child_mask;
         };
         //(!PAR[n] & (PAR[n] + 1)) - 1
         descend(c, 8, 16 - 1);// PAR[3]
@@ -128,25 +126,22 @@ fn average_ones_u32(n: u32) -> Option<u32> {
         descend(n, 1, 2 - 1);// PAR[0]
     }
     if cur < target {
-        result -= W(1);
+        result -= 1;
     }
 
-    Some(result.0 - 1)
+    Some(result - 1)
 }
 
 #[cfg(any(test, target_pointer_width = "64"))]
 fn average_ones_u64(n: u64) -> Option<u64> {
-    use std::num::Wrapping as W;
-    let n = W(n);
-
     // !0 / ((1 << (1 << n)) | 1)
-    const PAR: [W<u64>; 6] = [
-        W(!0 / 0x3),
-        W(!0 / 0x5),
-        W(!0 / 0x11),
-        W(!0 / 0x101),
-        W(!0 / 0x10001),
-        W(!0 / 0x100000001)
+    const PAR: [u64; 6] = [
+        !0 / 0x3,
+        !0 / 0x5,
+        !0 / 0x11,
+        !0 / 0x101,
+        !0 / 0x10001,
+        !0 / 0x100000001
     ];
 
     // Counting set bits in parallel
@@ -156,25 +151,25 @@ fn average_ones_u64(n: u64) -> Option<u64> {
     let d = (c + (c >> 8)) & PAR[3];
     let e = (d + (d >> 16)) & PAR[4];
     let mut cur = e >> 32;
-    let f = (e + cur) & PAR[5];
-    if f <= W(1) {
+    let count = (e + cur) & PAR[5];
+    if count <= 1 {
         return None;
     }
 
-    let mut target = f / W(2);
+    // Amount of set bits that are wanted for both sides
+    let mut target = count / 2;
 
     // Binary search
-    let mut result = W(64);
+    let mut result = 64;
     {
         let mut descend = |child, child_stride, child_mask| {
-            let child_stride = W(child_stride as u64);
             if cur < target {
-                result -= W(2) * child_stride;
+                result -= 2 * child_stride;
                 target -= cur;
             }
             // Descend to upper half or lower half
             // depending on are we over or under
-            cur = (child >> (result - child_stride).0 as usize) & W(child_mask);
+            cur = (child >> (result - child_stride)) & child_mask;
         };
         //(!PAR[n] & (PAR[n] + 1)) - 1
         descend(d, 16, 256 - 1);// PAR[4]
@@ -184,10 +179,10 @@ fn average_ones_u64(n: u64) -> Option<u64> {
         descend(n,  1, 2 - 1);// PAR[0]
     }
     if cur < target {
-        result -= W(1);
+        result -= 1;
     }
 
-    Some(result.0 - 1)
+    Some(result - 1)
 }
 
 #[cfg(test)]
@@ -222,7 +217,7 @@ mod test_average_ones {
                 assert_eq!(
                     (i & mask).count_ones(),
                     (i & !mask).count_ones(),
-                    "{}", i
+                    "{:x}", i
                 );
             }
         }
@@ -312,7 +307,7 @@ mod test_average_ones {
                 assert_eq!(
                     (i & mask).count_ones(),
                     (i & !mask).count_ones(),
-                    "{}", i
+                    "{:x}", i
                 );
             }
         }
@@ -390,9 +385,14 @@ mod test_average_ones {
 
     #[test]
     fn specific_values() {
-        assert_eq!(Some(4), average_ones(0b10110));
-        assert_eq!(Some(5), average_ones(0b100010));
-        assert_eq!(None, average_ones(0));
-        assert_eq!(None, average_ones(1));
+        assert_eq!(Some(4), average_ones_u32(0b10110));
+        assert_eq!(Some(5), average_ones_u32(0b100010));
+        assert_eq!(None, average_ones_u32(0));
+        assert_eq!(None, average_ones_u32(1));
+
+        assert_eq!(Some(4), average_ones_u64(0b10110));
+        assert_eq!(Some(5), average_ones_u64(0b100010));
+        assert_eq!(None, average_ones_u64(0));
+        assert_eq!(None, average_ones_u64(1));
     }
 }
