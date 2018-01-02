@@ -38,63 +38,46 @@ impl<T: BitSetLike> BitIter<T> {
     }
 }
 
+enum State<T> {
+    Empty,
+    Continue,
+    Value(T)
+}
+
 impl<T> Iterator for BitIter<T>
     where T: BitSetLike
 {
     type Item = Index;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            // Look at first level
-            if self.masks[0] != 0 {
-                // Take first bit that isn't zero
-                let bit = self.masks[0].trailing_zeros();
-                // Remove it from masks
-                self.masks[0] &= !(1 << bit);
-                // and returns it's index
-                return Some(self.prefix[0] | bit);
-            }
-            // Look at second level
-            if self.masks[1] != 0 {
-                // Take first bit that isn't zero
-                let bit = self.masks[1].trailing_zeros();
-                // Remove it from masks
-                self.masks[1] &= !(1 << bit);
-                // Calculate index of the bit in first level
-                let idx = self.prefix.get(1).cloned().unwrap_or(0) | bit;
+        use self::State::*;
+        let mut handle_level = |level: usize| if self.masks[level] == 0 {
+            Empty
+        } else {
+            // Take first bit that isn't zero
+            let first_bit = self.masks[level].trailing_zeros();
+            // Remove it from masks
+            self.masks[level] &= !(1 << first_bit);
+            // Calculate index of the bit
+            let idx = self.prefix.get(level).cloned().unwrap_or(0) | first_bit;
+            if level == 0 {
+                // It's the lowest layer so idx is the next bit in the set
+                Value(idx)
+            } else {
                 // Take corresponding usize from layer below
-                self.masks[0] = get_from_layer(&self.set, 0, idx as usize);
+                self.masks[level - 1] = get_from_layer(&self.set, level - 1, idx as usize);
                 // Prefix of the complete index
-                self.prefix[0] = idx << BITS;
-                continue;
+                self.prefix[level - 1] = idx << BITS;
+                Continue
             }
-            // Look at third level
-            if self.masks[2] != 0 {
-                // Take first bit that isn't zero
-                let bit = self.masks[2].trailing_zeros();
-                // Remove it from masks
-                self.masks[2] &= !(1 << bit);
-                // Calculate index of the bit in second level
-                let idx = self.prefix.get(2).cloned().unwrap_or(0) | bit;
-                // Take corresponding usize from layer below
-                self.masks[1] = get_from_layer(&self.set, 1, idx as usize);
-                // Prefix of the index of the second level
-                self.prefix[1] = idx << BITS;
-                continue;
-            }
-            // Look at the 4th and highest level
-            if self.masks[3] != 0 {
-                // Take first bit that isn't zero
-                let bit = self.masks[3].trailing_zeros();
-                // Remove it from masks
-                self.masks[3] &= !(1 << bit);
-                // Calculate index of the bit in third level
-                let idx = self.prefix.get(3).cloned().unwrap_or(0) | bit;
-                // Take corresponding usize from layer below
-                self.masks[2] = get_from_layer(&self.set, 2, idx as usize);
-                // Prefix of the index of the third level
-                self.prefix[2] = bit << BITS;
-                continue;
+        };
+        'find: loop {
+            for level in 0..LAYERS {
+                match handle_level(level) {
+                    Value(v) => return Some(v),
+                    Continue => continue 'find,
+                    Empty => {},
+                }
             }
             // There is no set indices left
             return None;
