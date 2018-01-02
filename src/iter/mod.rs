@@ -54,19 +54,18 @@ impl<T> Iterator for BitIter<T>
         let mut handle_level = |level: usize| if self.masks[level] == 0 {
             Empty
         } else {
-            // Take first bit that isn't zero
+            // Take the first bit that isn't zero
             let first_bit = self.masks[level].trailing_zeros();
-            // Remove it from masks
+            // Remove it from the mask
             self.masks[level] &= !(1 << first_bit);
-            // Calculate index of the bit
+            // Calculate the index of it
             let idx = self.prefix.get(level).cloned().unwrap_or(0) | first_bit;
             if level == 0 {
-                // It's the lowest layer so idx is the next bit in the set
+                // It's the lowest layer, so the `idx` is the next set bit
                 Value(idx)
             } else {
-                // Take corresponding usize from layer below
+                // Take the corresponding `usize` from the layer below
                 self.masks[level - 1] = self.set.get_from_layer(level - 1, idx as usize);
-                // Prefix of the complete index
                 self.prefix[level - 1] = idx << BITS;
                 Continue
             }
