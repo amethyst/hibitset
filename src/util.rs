@@ -1,4 +1,3 @@
-use BitSetLike;
 
 /// Type used for indexing.
 pub type Index = u32;
@@ -55,17 +54,6 @@ impl Row for Index {
 #[inline]
 pub fn offsets(bit: Index) -> (usize, usize, usize) {
     (bit.offset(SHIFT1), bit.offset(SHIFT2), bit.offset(SHIFT3))
-}
-
-/// Gets the `usize` corresponding to layer and index
-pub fn get_from_layer<T: BitSetLike>(set: &T, layer: usize, idx: usize) -> usize {
-    match layer {
-        0 => set.layer0(idx),
-        1 => set.layer1(idx),
-        2 => set.layer2(idx),
-        3 => set.layer3(),
-        _ => panic!("Invalid layer {}", layer),
-    }
 }
 
 /// Finds the highest bit that splits set bits of the `usize`

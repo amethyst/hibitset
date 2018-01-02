@@ -180,19 +180,32 @@ impl BitSet {
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 pub trait BitSetLike {
-    /// Return a usize where each bit represents if any word in layer2
+    /// Gets the `usize` corresponding to layer and index.
+    ///
+    /// The `layer` should be in the range [0, 3]
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        match layer {
+            0 => self.layer0(idx),
+            1 => self.layer1(idx),
+            2 => self.layer2(idx),
+            3 => self.layer3(),
+            _ => panic!("Invalid layer: {}", layer),
+        }
+    }
+
+    /// Return a `usize` where each bit represents if any word in layer2
     /// has been set.
     fn layer3(&self) -> usize;
 
-    /// Return the usize from the array of usizes that indicates if any
+    /// Return the `usize` from the array of usizes that indicates if any
     /// bit has been set in layer1
     fn layer2(&self, i: usize) -> usize;
 
-    /// Return the usize from the array of usizes that indicates if any
+    /// Return the `usize` from the array of usizes that indicates if any
     /// bit has been set in layer0
     fn layer1(&self, i: usize) -> usize;
 
-    /// Return a usize that maps to the direct 1:1 association with
+    /// Return a `usize` that maps to the direct 1:1 association with
     /// each index of the set
     fn layer0(&self, i: usize) -> usize;
 

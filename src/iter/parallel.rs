@@ -2,7 +2,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
 use iter::{BITS, LAYERS, BitSetLike, BitIter, Index};
-use util::{average_ones, get_from_layer};
+use util::average_ones;
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
@@ -137,7 +137,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                         // The level that is descended from doesn't have anything
                         // interesting so it can be skipped in the future.
                         self.0.masks[level] = 0;
-                        self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
+                        self.0.masks[level - 1] = self.0.set.get_from_layer(level - 1, idx);
                         None
                     })
             };

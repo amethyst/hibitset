@@ -65,7 +65,7 @@ impl<T> Iterator for BitIter<T>
                 Value(idx)
             } else {
                 // Take corresponding usize from layer below
-                self.masks[level - 1] = get_from_layer(&self.set, level - 1, idx as usize);
+                self.masks[level - 1] = self.set.get_from_layer(level - 1, idx as usize);
                 // Prefix of the complete index
                 self.prefix[level - 1] = idx << BITS;
                 Continue
