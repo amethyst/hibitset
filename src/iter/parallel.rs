@@ -71,7 +71,7 @@ impl<T> ParallelIterator for BitParIter<T>
 ///
 /// Usually used internally by `BitParIter`.
 #[derive(Debug)]
-pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>, u8);
+pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>, pub u8);
 
 impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
     where T: BitSetLike
