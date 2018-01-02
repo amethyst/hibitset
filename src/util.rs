@@ -72,6 +72,7 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 /// ````
 // TODO: Can 64/32 bit variants be merged to one implementation?
 // Seems that this would need integer generics to do.
+#[cfg(feature="parallel")]
 pub fn average_ones(n: usize) -> Option<usize> {
     #[cfg(target_pointer_width = "64")]
     let average = average_ones_u64(n as u64).map(|n| n as usize);
@@ -82,7 +83,7 @@ pub fn average_ones(n: usize) -> Option<usize> {
     average
 }
 
-#[cfg(any(test, target_pointer_width = "32"))]
+#[cfg(all(any(test, target_pointer_width = "32"), feature="parallel"))]
 fn average_ones_u32(n: u32) -> Option<u32> {
     // !0 / ((1 << (1 << n)) | 1)
     const PAR: [u32; 5] = [
@@ -132,7 +133,7 @@ fn average_ones_u32(n: u32) -> Option<u32> {
     Some(result - 1)
 }
 
-#[cfg(any(test, target_pointer_width = "64"))]
+#[cfg(all(any(test, target_pointer_width = "64"), feature="parallel"))]
 fn average_ones_u64(n: u64) -> Option<u64> {
     // !0 / ((1 << (1 << n)) | 1)
     const PAR: [u64; 6] = [
@@ -185,7 +186,7 @@ fn average_ones_u64(n: u64) -> Option<u64> {
     Some(result - 1)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature="parallel"))]
 mod test_average_ones {
     use super::*;
     #[test]
