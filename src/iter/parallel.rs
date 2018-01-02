@@ -137,7 +137,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                         // The level that is descended from doesn't have anything
                         // interesting so it can be skipped in the future.
                         self.0.masks[level] = 0;
-                        self.0.masks[level - 1] = get_from_layer(self.0.set, level - 1, idx);
+                        self.0.masks[level - 1] = self.0.set.get_from_layer(level - 1, idx);
                         None
                     })
             };
@@ -155,17 +155,6 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
         where F: Folder<Self::Item>
     {
         folder.consume_iter(self.0)
-    }
-}
-
-/// Gets usize by a layer and an index from the bitset.
-fn get_from_layer<T: BitSetLike>(set: &T, layer: usize, idx: usize) -> usize {
-    match layer {
-        0 => set.layer0(idx),
-        1 => set.layer1(idx),
-        2 => set.layer2(idx),
-        3 => set.layer3(),
-        _ => panic!("Invalid layer {}", layer),
     }
 }
 
