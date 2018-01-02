@@ -61,9 +61,9 @@ impl<T> Iterator for BitIter<T>
                 // Remove it from masks
                 self.masks[1] &= !(1 << bit);
                 // Calculate index of the bit in first level
-                let idx = self.prefix[1] | bit;
+                let idx = self.prefix.get(1).cloned().unwrap_or(0) | bit;
                 // Take corresponding usize from layer below
-                self.masks[0] = self.set.layer0(idx as usize);
+                self.masks[0] = get_from_layer(&self.set, 0, idx as usize);
                 // Prefix of the complete index
                 self.prefix[0] = idx << BITS;
                 continue;
@@ -75,9 +75,9 @@ impl<T> Iterator for BitIter<T>
                 // Remove it from masks
                 self.masks[2] &= !(1 << bit);
                 // Calculate index of the bit in second level
-                let idx = self.prefix[2] | bit;
+                let idx = self.prefix.get(2).cloned().unwrap_or(0) | bit;
                 // Take corresponding usize from layer below
-                self.masks[1] = self.set.layer1(idx as usize);
+                self.masks[1] = get_from_layer(&self.set, 1, idx as usize);
                 // Prefix of the index of the second level
                 self.prefix[1] = idx << BITS;
                 continue;
@@ -88,8 +88,10 @@ impl<T> Iterator for BitIter<T>
                 let bit = self.masks[3].trailing_zeros();
                 // Remove it from masks
                 self.masks[3] &= !(1 << bit);
+                // Calculate index of the bit in third level
+                let idx = self.prefix.get(3).cloned().unwrap_or(0) | bit;
                 // Take corresponding usize from layer below
-                self.masks[2] = self.set.layer2(bit as usize);
+                self.masks[2] = get_from_layer(&self.set, 2, idx as usize);
                 // Prefix of the index of the third level
                 self.prefix[2] = bit << BITS;
                 continue;

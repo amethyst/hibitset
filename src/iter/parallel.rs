@@ -2,7 +2,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
 use iter::{BITS, LAYERS, BitSetLike, BitIter, Index};
-use util::average_ones;
+use util::{average_ones, get_from_layer};
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
@@ -155,17 +155,6 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
         where F: Folder<Self::Item>
     {
         folder.consume_iter(self.0)
-    }
-}
-
-/// Gets usize by a layer and an index from the bitset.
-fn get_from_layer<T: BitSetLike>(set: &T, layer: usize, idx: usize) -> usize {
-    match layer {
-        0 => set.layer0(idx),
-        1 => set.layer1(idx),
-        2 => set.layer2(idx),
-        3 => set.layer3(),
-        _ => panic!("Invalid layer {}", layer),
     }
 }
 
