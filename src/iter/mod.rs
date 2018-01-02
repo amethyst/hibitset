@@ -38,10 +38,10 @@ impl<T: BitSetLike> BitIter<T> {
     }
 }
 
-enum State<T> {
+enum State {
     Empty,
     Continue,
-    Value(T)
+    Value(Index)
 }
 
 impl<T> Iterator for BitIter<T>
@@ -51,7 +51,24 @@ impl<T> Iterator for BitIter<T>
 
     fn next(&mut self) -> Option<Self::Item> {
         use self::State::*;
-        let mut handle_level = |level: usize| if self.masks[level] == 0 {
+        'find: loop {
+            for level in 0..LAYERS {
+                match self.handle_level(level) {
+                    Value(v) => return Some(v),
+                    Continue => continue 'find,
+                    Empty => {},
+                }
+            }
+            // There is no set bits left
+            return None;
+        }
+    }
+}
+
+impl<T: BitSetLike> BitIter<T> {
+    fn handle_level(&mut self, level: usize) -> State {
+        use self::State::*;
+        if self.masks[level] == 0 {
             Empty
         } else {
             // Take the first bit that isn't zero
@@ -69,17 +86,6 @@ impl<T> Iterator for BitIter<T>
                 self.prefix[level - 1] = idx << BITS;
                 Continue
             }
-        };
-        'find: loop {
-            for level in 0..LAYERS {
-                match handle_level(level) {
-                    Value(v) => return Some(v),
-                    Continue => continue 'find,
-                    Empty => {},
-                }
-            }
-            // There is no set indices left
-            return None;
         }
     }
 }
