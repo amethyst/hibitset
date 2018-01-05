@@ -112,6 +112,47 @@ impl BitSet {
         false
     }
 
+    fn layer_mut(&mut self, level: usize, idx: usize) -> &mut usize {
+        match level {
+            0 => {
+                Self::fill_up(&mut self.layer0, idx);
+                &mut self.layer0[idx]
+            }
+            1 => {
+                Self::fill_up(&mut self.layer1, idx);
+                &mut self.layer1[idx]
+            }
+            2 => {
+                Self::fill_up(&mut self.layer2, idx);
+                &mut self.layer2[idx]
+            }
+            3 => &mut self.layer3,
+            _ => panic!("Invalid layer: {}", level),
+        }
+    }
+
+    /// Adds contents of another bitset to this one.
+    #[inline]
+    pub fn add_all<B: BitSetLike>(&mut self, other: &B) {
+        use iter::State::*;
+        self.layer3 |= other.layer3();
+        let mut iter = BitIter::new(other, [0, 0, 0, other.layer3()], [0; 3]);
+        'find: loop {
+            for level in 1..LAYERS {
+                match iter.handle_level(level) {
+                    Value(_) => unreachable!("Lowest level is not iterated directly."),
+                    Continue => {
+                        let idx = (iter.prefix[level - 1] >> BITS) as usize;
+                        *self.layer_mut(level - 1, idx) |= other.get_from_layer(level - 1, idx);
+                        continue 'find;
+                    }
+                    Empty => {},
+                }
+            }
+            break;
+        }
+    }
+
     /// Removes `id` from the set, returns `true` if the value
     /// was removed, and `false` if the value was not set
     /// to begin with.
@@ -301,6 +342,21 @@ mod tests {
         for i in 0..1_000 {
             assert!(c.contains(i));
         }
+    }
+
+    #[test]
+    fn add_all() {
+        use std::mem::size_of;
+        let usize_bits = size_of::<usize>() as u32 * 8;
+        let n = 1_000;
+        let f = |n| 10 * usize_bits * n;
+        let mut c1 = BitSet::new();
+        let c2: BitSet = (0..n).map(&f).collect();
+        c1.add_all(&c2);
+        for c in 0..n {
+            assert!(c1.contains(f(c)));
+        }
+        assert_eq!(c1.iter().count(), n as usize);
     }
 
     #[test]

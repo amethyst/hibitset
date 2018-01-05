@@ -12,9 +12,9 @@ mod parallel;
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
 pub struct BitIter<T> {
-    set: T,
-    masks: [usize; 4],
-    prefix: [u32; 3],
+    pub(crate) set: T,
+    pub(crate) masks: [usize; 4],
+    pub(crate) prefix: [u32; 3],
 }
 
 impl<T> BitIter<T> {
@@ -38,7 +38,7 @@ impl<T: BitSetLike> BitIter<T> {
     }
 }
 
-enum State {
+pub(crate) enum State {
     Empty,
     Continue,
     Value(Index)
@@ -66,7 +66,7 @@ impl<T> Iterator for BitIter<T>
 }
 
 impl<T: BitSetLike> BitIter<T> {
-    fn handle_level(&mut self, level: usize) -> State {
+    pub(crate) fn handle_level(&mut self, level: usize) -> State {
         use self::State::*;
         if self.masks[level] == 0 {
             Empty
