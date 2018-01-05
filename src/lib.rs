@@ -136,14 +136,15 @@ impl BitSet {
     pub fn add_all<B: BitSetLike>(&mut self, other: &B) {
         use iter::State::*;
         self.layer3 |= other.layer3();
-        let mut iter = BitIter::new(other, [0, 0, 0, other.layer3()], [0; 3]);
+        let mut iter = other.iter();
         'find: loop {
             for level in 1..LAYERS {
                 match iter.handle_level(level) {
                     Value(_) => unreachable!("Lowest level is not iterated directly."),
                     Continue => {
-                        let idx = (iter.prefix[level - 1] >> BITS) as usize;
-                        *self.layer_mut(level - 1, idx) |= other.get_from_layer(level - 1, idx);
+                        let lower = level - 1;
+                        let idx = (iter.prefix[lower] >> BITS) as usize;
+                        *self.layer_mut(lower, idx) |= other.get_from_layer(lower, idx);
                         continue 'find;
                     }
                     Empty => {},
