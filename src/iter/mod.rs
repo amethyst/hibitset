@@ -1,5 +1,5 @@
 use util::*;
-use BitSetLike;
+use {BitSet, BitSetLike};
 
 #[cfg(feature="parallel")]
 pub use self::parallel::{BitParIter, BitProducer};
@@ -13,8 +13,8 @@ mod parallel;
 #[derive(Debug)]
 pub struct BitIter<T> {
     pub(crate) set: T,
-    pub(crate) masks: [usize; 4],
-    pub(crate) prefix: [u32; 3],
+    pub(crate) masks: [usize; LAYERS],
+    pub(crate) prefix: [u32; LAYERS - 1],
 }
 
 impl<T> BitIter<T> {
@@ -22,7 +22,7 @@ impl<T> BitIter<T> {
     /// but just [`.iter()`] on a bit set.
     ///
     /// [`.iter()`]: ../trait.BitSetLike.html#method.iter
-    pub fn new(set: T, masks: [usize; 4], prefix: [u32; 3]) -> Self {
+    pub fn new(set: T, masks: [usize; LAYERS], prefix: [u32; LAYERS - 1]) -> Self {
         BitIter {
             set: set,
             masks: masks,
@@ -38,13 +38,13 @@ impl<T: BitSetLike> BitIter<T> {
     }
 }
 
-impl<'a> BitIter<&'a mut ::BitSet> {
+impl<'a> BitIter<&'a mut BitSet> {
     /// Clears the rest of the bitset that hasn't been iterated yet.
     pub fn clear(&mut self) {
         use self::State::*;
         'find: loop {
             for level in 1..LAYERS {
-                match self.handle_level_mut(level) {
+                match self.handle_level(level) {
                     Value(_) => unreachable!("Lowest level is not iterated directly."),
                     Continue => {
                         let lower = level - 1;
@@ -89,31 +89,6 @@ impl<T> Iterator for BitIter<T>
 
 impl<T: BitSetLike> BitIter<T> {
     pub(crate) fn handle_level(&mut self, level: usize) -> State {
-        use self::State::*;
-        if self.masks[level] == 0 {
-            Empty
-        } else {
-            // Take the first bit that isn't zero
-            let first_bit = self.masks[level].trailing_zeros();
-            // Remove it from the mask
-            self.masks[level] &= !(1 << first_bit);
-            // Calculate the index of it
-            let idx = self.prefix.get(level).cloned().unwrap_or(0) | first_bit;
-            if level == 0 {
-                // It's the lowest layer, so the `idx` is the next set bit
-                Value(idx)
-            } else {
-                // Take the corresponding `usize` from the layer below
-                self.masks[level - 1] = self.set.get_from_layer(level - 1, idx as usize);
-                self.prefix[level - 1] = idx << BITS;
-                Continue
-            }
-        }
-    }
-}
-
-impl<'a, T: BitSetLike> BitIter<&'a mut T> {
-    pub(crate) fn handle_level_mut(&mut self, level: usize) -> State {
         use self::State::*;
         if self.masks[level] == 0 {
             Empty
