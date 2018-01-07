@@ -1,10 +1,72 @@
 
-use std::ops::{BitAnd, BitOr, BitXor, Not};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::iter::{FromIterator, IntoIterator};
 
 use util::*;
 
 use {AtomicBitSet, BitIter, BitSet, BitSetLike};
+
+impl<'a, B> BitOrAssign<&'a B> for BitSet
+    where B: BitSetLike
+{
+    fn bitor_assign(&mut self, lhs: &B) {
+        use iter::State::*;
+        let mut iter = lhs.iter();
+        'find: loop {
+            for level in 1..LAYERS {
+                match iter.handle_level(level) {
+                    Value(_) => unreachable!("Lowest level is not iterated directly."),
+                    Continue => {
+                        let lower = level - 1;
+                        let idx = (iter.prefix[lower] >> BITS) as usize;
+
+                        *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
+                        continue 'find;
+                    }
+                    Empty => {},
+                }
+            }
+            break;
+        }
+        self.layer3 |= lhs.layer3();
+    }
+}
+
+impl<'a, B> BitAndAssign<&'a B> for BitSet
+    where B: BitSetLike
+{
+    fn bitand_assign(&mut self, lhs: &B) {
+        use iter::State::*;
+        let mut iter = lhs.iter();
+        'find: loop {
+            for level in 1..LAYERS {
+                match iter.handle_level(level) {
+                    Value(_) => unreachable!("Lowest level is not iterated directly."),
+                    Continue => {
+                        let lower = level - 1;
+                        let idx = (iter.prefix[lower] >> BITS) as usize;
+                        let our_layer = self.get_from_layer(lower, idx);
+                        let their_layer = lhs.get_from_layer(lower, idx);
+
+                        let mut mask = [0; 4];
+                        mask[lower] = our_layer & !their_layer;
+                        BitIter::new(&mut *self, mask, iter.prefix).clear();
+
+                        *self.layer_mut(lower, idx) &= their_layer;
+                        continue 'find;
+                    }
+                    Empty => {},
+                }
+            }
+            break;
+        }
+
+        let mask = [0, 0, 0, self.layer3() & !lhs.layer3()];
+        BitIter::new(&mut *self, mask, [0; 3]).clear();
+
+        self.layer3 &= lhs.layer3();
+    }
+}
 
 /// `BitSetAnd` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an intersection of the
@@ -260,6 +322,79 @@ iterator!(AtomicBitSet);
 #[cfg(test)]
 mod tests {
     use {Index, BitSet, BitSetLike, BitSetXor};
+
+    #[test]
+    fn or_assign() {
+        use std::mem::size_of;
+        use std::collections::HashSet;
+
+        let usize_bits = size_of::<usize>() as u32 * 8;
+        let n = 10_000;
+        let f1 = &|n| 7 * usize_bits * n;
+        let f2 = &|n| 13 * usize_bits * n;
+
+        let mut c1: BitSet = (0..n).map(f1).collect();
+        let c2: BitSet = (0..n).map(f2).collect();
+        c1 |= &c2;
+
+        let h1: HashSet<_> = (0..n).map(f1).collect();
+        let h2: HashSet<_> = (0..n).map(f2).collect();
+        assert_eq!(
+            c1.iter().collect::<HashSet<_>>(),
+            &h1 | &h2
+        );
+    }
+
+    #[test]
+    fn and_assign() {
+        use std::mem::size_of;
+        use std::collections::HashSet;
+
+        let usize_bits = size_of::<usize>() as u32 * 8;
+        let n = 10_000;
+        let f1 = &|n| 7 * usize_bits * n;
+        let f2 = &|n| 13 * usize_bits * n;
+
+        let mut c1: BitSet = (0..n).map(f1).collect();
+        let c2: BitSet = (0..n).map(f2).collect();
+        c1 &= &c2;
+
+        let h1: HashSet<_> = (0..n).map(f1).collect();
+        let h2: HashSet<_> = (0..n).map(f2).collect();
+        assert_eq!(
+            c1.iter().collect::<HashSet<_>>(),
+            &h1 & &h2
+        );
+    }
+
+    #[test]
+    fn and_assign_specific() {
+        use util::BITS;
+        let mut c1 = BitSet::new();
+        c1.add(0);
+        let common = ((1 << BITS) << BITS) << BITS;
+        c1.add(common);
+        c1.add((((1 << BITS) << BITS) + 1) << BITS);
+        let mut c2: BitSet = BitSet::new();
+        c2.add(common);
+        c2.add((((1 << BITS) << BITS) + 2) << BITS);
+        c1 &= &c2;
+        assert_eq!(c1.iter().collect::<Vec<_>>(), [common]);
+    }
+
+    #[test]
+    fn and_assign_with_modification() {
+        use util::BITS;
+        let mut c1 = BitSet::new();
+        c1.add(0);
+        c1.add((1 << BITS) << BITS);
+        let mut c2: BitSet = BitSet::new();
+        c2.add(0);
+        c1 &= &c2;
+        let added = ((1 << BITS) + 1) << BITS;
+        c1.add(added);
+        assert_eq!(c1.iter().collect::<Vec<_>>(), [0, added]);
+    }
 
     #[test]
     fn operators() {
