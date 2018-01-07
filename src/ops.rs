@@ -18,7 +18,7 @@ impl<'a, B> BitOrAssign<&'a B> for BitSet
                     Value(_) => unreachable!("Lowest level is not iterated directly."),
                     Continue => {
                         let lower = level - 1;
-                        let idx = (iter.prefix[lower] >> BITS) as usize;
+                        let idx = iter.prefix[lower] as usize >> BITS;
 
                         *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
                         continue 'find;
@@ -38,14 +38,14 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
     fn bitand_assign(&mut self, lhs: &B) {
         use iter::State::*;
         let mut iter = lhs.iter();
-        iter.masks[3] &= self.layer3();
+        iter.masks[LAYERS - 1] &= self.layer3();
         'find: loop {
             for level in 1..LAYERS {
                 match iter.handle_level(level) {
                     Value(_) => unreachable!("Lowest level is not iterated directly."),
                     Continue => {
                         let lower = level - 1;
-                        let idx = (iter.prefix[lower] >> BITS) as usize;
+                        let idx = iter.prefix[lower] as usize >> BITS;
                         let our_layer = self.get_from_layer(lower, idx);
                         let their_layer = lhs.get_from_layer(lower, idx);
 
@@ -64,10 +64,56 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
             break;
         }
 
-        let masks = [0, 0, 0, self.layer3() & !lhs.layer3()];
+        let mut masks = [0; LAYERS];
+        masks[LAYERS - 1] =  self.layer3() & !lhs.layer3();
         BitIter::new(&mut *self, masks, [0; LAYERS - 1]).clear();
 
         self.layer3 &= lhs.layer3();
+    }
+}
+
+impl<'a, B> BitXorAssign<&'a B> for BitSet
+    where B: BitSetLike
+{
+    fn bitxor_assign(&mut self, lhs: &B) {
+        use iter::State::*;
+        let mut iter = lhs.iter();
+        'find: loop {
+            for level in 1..LAYERS {
+                match iter.handle_level(level) {
+                    Value(_) => unreachable!("Lowest level is not iterated directly."),
+                    Continue => {
+                        let lower = level - 1;
+                        let idx = iter.prefix[lower] as usize >> BITS;
+
+                        if lower == 0 {
+                            *self.layer_mut(lower, idx) ^= lhs.get_from_layer(lower, idx);
+
+                            let mut change_bit = |level| {
+                                let lower = level - 1;
+                                let h = iter.prefix.get(level).cloned().unwrap_or(0) as usize;
+                                let l = iter.prefix[lower] as usize >> BITS;
+                                let mask = 1 << (l & !h);
+
+                                if self.get_from_layer(lower, l) == 0 {
+                                    *self.layer_mut(level, h >> BITS) &= !mask;
+                                } else {
+                                    *self.layer_mut(level, h >> BITS) |= mask;
+                                }
+                            };
+
+                            change_bit(level);
+                            if iter.masks[level] == 0 {
+                                (2..LAYERS).for_each(change_bit);
+                            }
+                        }
+                        continue 'find;
+                    }
+                    Empty => {},
+                }
+            }
+            break;
+        }
     }
 }
 
@@ -338,6 +384,7 @@ mod tests {
 
         let mut c1: BitSet = (0..n).map(f1).collect();
         let c2: BitSet = (0..n).map(f2).collect();
+
         c1 |= &c2;
 
         let h1: HashSet<_> = (0..n).map(f1).collect();
@@ -360,6 +407,7 @@ mod tests {
 
         let mut c1: BitSet = (0..n).map(f1).collect();
         let c2: BitSet = (0..n).map(f2).collect();
+
         c1 &= &c2;
 
         let h1: HashSet<_> = (0..n).map(f1).collect();
@@ -373,30 +421,82 @@ mod tests {
     #[test]
     fn and_assign_specific() {
         use util::BITS;
+
         let mut c1 = BitSet::new();
         c1.add(0);
         let common = ((1 << BITS) << BITS) << BITS;
         c1.add(common);
         c1.add((((1 << BITS) << BITS) + 1) << BITS);
+
         let mut c2: BitSet = BitSet::new();
         c2.add(common);
         c2.add((((1 << BITS) << BITS) + 2) << BITS);
+
         c1 &= &c2;
+
         assert_eq!(c1.iter().collect::<Vec<_>>(), [common]);
     }
 
     #[test]
     fn and_assign_with_modification() {
         use util::BITS;
+
         let mut c1 = BitSet::new();
         c1.add(0);
         c1.add((1 << BITS) << BITS);
+
         let mut c2: BitSet = BitSet::new();
         c2.add(0);
+
         c1 &= &c2;
+
         let added = ((1 << BITS) + 1) << BITS;
         c1.add(added);
+
         assert_eq!(c1.iter().collect::<Vec<_>>(), [0, added]);
+    }
+
+    #[test]
+    fn xor_assign() {
+        use std::mem::size_of;
+        use std::collections::HashSet;
+
+        let usize_bits = size_of::<usize>() as u32 * 8;
+        let n = 10_000;
+        let f1 = &|n| 7 * usize_bits * n;
+        let f2 = &|n| 13 * usize_bits * n;
+
+        let mut c1: BitSet = (0..n).map(f1).collect();
+        let c2: BitSet = (0..n).map(f2).collect();
+        c1 ^= &c2;
+
+        let h1: HashSet<_> = (0..n).map(f1).collect();
+        let h2: HashSet<_> = (0..n).map(f2).collect();
+        assert_eq!(
+            c1.iter().collect::<HashSet<_>>(),
+            &h1 ^ &h2
+        );
+    }
+
+    #[test]
+    fn xor_assign_specific() {
+        use util::BITS;
+
+        let mut c1 = BitSet::new();
+        c1.add(0);
+        let common = ((1 << BITS) << BITS) << BITS;
+        c1.add(common);
+        let a = (((1 << BITS) + 1) << BITS) << BITS;
+        c1.add(a);
+
+        let mut c2: BitSet = BitSet::new();
+        c2.add(common);
+        let b = (((1 << BITS) + 2) << BITS) << BITS;
+        c2.add(b);
+
+        c1 ^= &c2;
+
+        assert_eq!(c1.iter().collect::<Vec<_>>(), [0, a, b]);
     }
 
     #[test]
