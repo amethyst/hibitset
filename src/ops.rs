@@ -64,7 +64,7 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
             break;
         }
 
-        let masks = [0; LAYERS];
+        let mut masks = [0; LAYERS];
         masks[LAYERS - 1] =  self.layer3() & !lhs.layer3();
         BitIter::new(&mut *self, masks, [0; LAYERS - 1]).clear();
 
