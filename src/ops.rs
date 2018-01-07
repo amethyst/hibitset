@@ -38,6 +38,7 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
     fn bitand_assign(&mut self, lhs: &B) {
         use iter::State::*;
         let mut iter = lhs.iter();
+        iter.masks[3] &= self.layer3();
         'find: loop {
             for level in 1..LAYERS {
                 match iter.handle_level(level) {
@@ -46,11 +47,12 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
                         let lower = level - 1;
                         let idx = (iter.prefix[lower] >> BITS) as usize;
                         let our_layer = self.get_from_layer(lower, idx);
+                        iter.masks[lower] &= our_layer;
                         let their_layer = lhs.get_from_layer(lower, idx);
 
-                        let mut mask = [0; 4];
-                        mask[lower] = our_layer & !their_layer;
-                        BitIter::new(&mut *self, mask, iter.prefix).clear();
+                        let mut masks = [0; 4];
+                        masks[lower] = our_layer & !their_layer;
+                        BitIter::new(&mut *self, masks, iter.prefix).clear();
 
                         *self.layer_mut(lower, idx) &= their_layer;
                         continue 'find;
@@ -61,8 +63,8 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
             break;
         }
 
-        let mask = [0, 0, 0, self.layer3() & !lhs.layer3()];
-        BitIter::new(&mut *self, mask, [0; 3]).clear();
+        let masks = [0, 0, 0, self.layer3() & !lhs.layer3()];
+        BitIter::new(&mut *self, masks, [0; 3]).clear();
 
         self.layer3 &= lhs.layer3();
     }
