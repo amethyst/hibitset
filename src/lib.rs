@@ -237,7 +237,7 @@ pub trait BitSetLike {
     {
         let layer3 = self.layer3();
 
-        BitIter::new(self, [0, 0, 0, layer3], [0; 3])
+        BitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
     }
 
     /// Create a parallel iterator that will scan over the keyspace
@@ -275,6 +275,35 @@ impl<'a, T> BitSetLike for &'a T
     #[inline]
     fn contains(&self, i: Index) -> bool {
         (*self).contains(i)
+    }
+}
+
+impl<'a, T> BitSetLike for &'a mut T
+    where T: BitSetLike
+{
+    #[inline]
+    fn layer3(&self) -> usize {
+        (**self).layer3()
+    }
+
+    #[inline]
+    fn layer2(&self, i: usize) -> usize {
+        (**self).layer2(i)
+    }
+
+    #[inline]
+    fn layer1(&self, i: usize) -> usize {
+        (**self).layer1(i)
+    }
+
+    #[inline]
+    fn layer0(&self, i: usize) -> usize {
+        (**self).layer0(i)
+    }
+
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        (**self).contains(i)
     }
 }
 
