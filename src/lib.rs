@@ -116,9 +116,13 @@ impl BitSet {
     }
 
     fn layer_mut(&mut self, level: usize, idx: usize) -> &mut usize {
-        let mut layer = &mut self.layers[level];
-        Self::fill_up(&mut layer, idx);
-        &mut layer[idx]
+        if level == self.layers.len() {
+            &mut self.top_layer
+        } else {
+            let mut layer = &mut self.layers[level];
+            Self::fill_up(&mut layer, idx);
+            &mut layer[idx]
+        }
     }
 
     /// Removes `id` from the set, returns `true` if the value
@@ -347,7 +351,6 @@ mod tests {
     }
     #[test]
     fn remove() {
-        use util::*;
         let mut c = BitSet::new();
         for i in 0..1_000 {
             assert!(!c.add(i));
