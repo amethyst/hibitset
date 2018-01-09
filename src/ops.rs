@@ -17,7 +17,7 @@ impl<'a, B> BitOrAssign<&'a B> for BitSet
             let idx = iter.prefix[lower] as usize >> BITS;
             *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
         }
-        self.layer3 |= lhs.layer3();
+        self.top_layer |= lhs.layer3();
     }
 }
 
@@ -46,7 +46,7 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
         masks[LAYERS - 1] =  self.layer3() & !lhs.layer3();
         BitIter::new(&mut *self, masks, [0; LAYERS - 1]).clear();
 
-        self.layer3 &= lhs.layer3();
+        self.top_layer &= lhs.layer3();
     }
 }
 

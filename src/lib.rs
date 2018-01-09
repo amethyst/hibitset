@@ -6,11 +6,16 @@
 
 #![deny(missing_docs)]
 
+extern crate typenum;
+extern crate generic_array;
 extern crate atom;
 #[cfg(feature="parallel")]
 extern crate rayon;
 #[cfg(test)]
 extern crate rand;
+
+use typenum::U3;
+use generic_array::{ArrayLength, GenericArray};
 
 mod atomic;
 mod iter;
@@ -32,11 +37,9 @@ use util::*;
 /// Note, a `BitSet` is limited by design to only `1,048,576` indices.
 /// Adding beyond this limit will cause the `BitSet` to panic.
 #[derive(Clone, Debug, Default)]
-pub struct BitSet {
-    layer3: usize,
-    layer2: Vec<usize>,
-    layer1: Vec<usize>,
-    layer0: Vec<usize>,
+pub struct BitSet<N: ArrayLength<Vec<usize>> = U3> {
+    top_layer: usize,
+    layers: GenericArray<Vec<usize>, N>,
 }
 
 impl BitSet {
@@ -63,11 +66,10 @@ impl BitSet {
     #[inline(never)]
     fn extend(&mut self, id: Index) {
         Self::valid_range(id);
-        let (p0, p1, p2) = offsets(id);
-
-        Self::fill_up(&mut self.layer2, p2);
-        Self::fill_up(&mut self.layer1, p1);
-        Self::fill_up(&mut self.layer0, p0);
+        for i in (0..self.layers.len()).rev() {
+            let p = id.offset(BITS * (i + 1));
+            Self::fill_up(&mut self.layers.as_mut_slice()[i], p);
+        }
     }
 
     fn fill_up(vec: &mut Vec<usize>, upper_index: usize) {
@@ -80,10 +82,11 @@ impl BitSet {
     /// when the lowest layer was set from 0.
     #[inline(never)]
     fn add_slow(&mut self, id: Index) {
-        let (_, p1, p2) = offsets(id);
-        self.layer1[p1] |= id.mask(SHIFT1);
-        self.layer2[p2] |= id.mask(SHIFT2);
-        self.layer3 |= id.mask(SHIFT3);
+        for i in 1..self.layers.len() {
+            let p = id.offset(BITS * (i + 1));
+            self.layers.as_mut_slice()[i][p] |= id.mask(BITS * i);
+        }
+        self.top_layer |= id.mask(BITS * self.layers.len());
     }
 
     /// Adds `id` to the `BitSet`. Returns `true` if the value was
@@ -92,43 +95,30 @@ impl BitSet {
     pub fn add(&mut self, id: Index) -> bool {
         let (p0, mask) = (id.offset(SHIFT1), id.mask(SHIFT0));
 
-        if p0 >= self.layer0.len() {
+        if p0 >= self.layers[0].len() {
             self.extend(id);
         }
 
-        if self.layer0[p0] & mask != 0 {
+        if self.layers[0][p0] & mask != 0 {
             return true;
         }
 
         // we need to set the bit on every layer to indicate
         // that the value can be found here.
-        let old = self.layer0[p0];
-        self.layer0[p0] |= mask;
+        let old = self.layers[0][p0];
+        self.layers[0][p0] |= mask;
         if old == 0 {
             self.add_slow(id);
         } else {
-            self.layer0[p0] |= mask;
+            self.layers[0][p0] |= mask;
         }
         false
     }
 
     fn layer_mut(&mut self, level: usize, idx: usize) -> &mut usize {
-        match level {
-            0 => {
-                Self::fill_up(&mut self.layer0, idx);
-                &mut self.layer0[idx]
-            }
-            1 => {
-                Self::fill_up(&mut self.layer1, idx);
-                &mut self.layer1[idx]
-            }
-            2 => {
-                Self::fill_up(&mut self.layer2, idx);
-                &mut self.layer2[idx]
-            }
-            3 => &mut self.layer3,
-            _ => panic!("Invalid layer: {}", level),
-        }
+        let mut layer = &mut self.layers[level];
+        Self::fill_up(&mut layer, idx);
+        &mut layer[idx]
     }
 
     /// Removes `id` from the set, returns `true` if the value
@@ -136,13 +126,12 @@ impl BitSet {
     /// to begin with.
     #[inline]
     pub fn remove(&mut self, id: Index) -> bool {
-        let (p0, p1, p2) = offsets(id);
-
-        if p0 >= self.layer0.len() {
+        let p0 = id.offset(SHIFT1);
+        if p0 >= self.layers[0].len() {
             return false;
         }
 
-        if self.layer0[p0] & id.mask(SHIFT0) == 0 {
+        if self.layers[0][p0] & id.mask(SHIFT0) == 0 {
             return false;
         }
 
@@ -150,22 +139,15 @@ impl BitSet {
         // its bit from layer0 to 3. the layers abover only
         // should be cleared if the bit cleared was the last bit
         // in its set
-        self.layer0[p0] &= !id.mask(SHIFT0);
-        if self.layer0[p0] != 0 {
-            return true;
+        for i in 0..self.layers.len() {
+            let p = id.offset(BITS * (i + 1));
+            self.layers[i][p] &= !id.mask(BITS * i);
+            if self.layers[i][p] != 0 {
+                return true;
+            }
         }
 
-        self.layer1[p1] &= !id.mask(SHIFT1);
-        if self.layer1[p1] != 0 {
-            return true;
-        }
-
-        self.layer2[p2] &= !id.mask(SHIFT2);
-        if self.layer2[p2] != 0 {
-            return true;
-        }
-
-        self.layer3 &= !id.mask(SHIFT3);
+        self.top_layer &= !id.mask(BITS * self.layers.len());
         return true;
     }
 
@@ -173,15 +155,15 @@ impl BitSet {
     #[inline]
     pub fn contains(&self, id: Index) -> bool {
         let p0 = id.offset(SHIFT1);
-        p0 < self.layer0.len() && (self.layer0[p0] & id.mask(SHIFT0)) != 0
+        p0 < self.layers[0].len() && (self.layers[0][p0] & id.mask(SHIFT0)) != 0
     }
 
     /// Completely wipes out the bit set.
     pub fn clear(&mut self) {
-        self.layer0.clear();
-        self.layer1.clear();
-        self.layer2.clear();
-        self.layer3 = 0;
+        for layer in self.layers.as_mut_slice() {
+            layer.clear();
+        }
+        self.top_layer = 0;
     }
 }
 
@@ -310,22 +292,22 @@ impl<'a, T> BitSetLike for &'a mut T
 impl BitSetLike for BitSet {
     #[inline]
     fn layer3(&self) -> usize {
-        self.layer3
+        self.top_layer
     }
 
     #[inline]
     fn layer2(&self, i: usize) -> usize {
-        self.layer2.get(i).map(|&x| x).unwrap_or(0)
+        self.layers[2].get(i).map(|&x| x).unwrap_or(0)
     }
 
     #[inline]
     fn layer1(&self, i: usize) -> usize {
-        self.layer1.get(i).map(|&x| x).unwrap_or(0)
+        self.layers[1].get(i).map(|&x| x).unwrap_or(0)
     }
 
     #[inline]
     fn layer0(&self, i: usize) -> usize {
-        self.layer0.get(i).map(|&x| x).unwrap_or(0)
+        self.layers[0].get(i).map(|&x| x).unwrap_or(0)
     }
 
     #[inline]
@@ -365,6 +347,7 @@ mod tests {
     }
     #[test]
     fn remove() {
+        use util::*;
         let mut c = BitSet::new();
         for i in 0..1_000 {
             assert!(!c.add(i));

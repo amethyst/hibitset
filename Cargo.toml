@@ -10,6 +10,8 @@ authors = ["csheratt"]
 
 [dependencies]
 atom = "0.3"
+typenum = "1.9.0"
+generic-array = "0.9.0"
 
 [dependencies.rayon]
 version = "1"
