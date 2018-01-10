@@ -186,7 +186,7 @@ mod test_bit_producer {
 
     use rayon::iter::plumbing::UnindexedProducer;
 
-    use typenum::{Add1, B1};
+    use typenum::{Add1, B1, Unsigned};
 
     use std::ops::Add;
 
@@ -224,8 +224,10 @@ mod test_bit_producer {
 
         let usize_bits = ::std::mem::size_of::<usize>() * 8;
 
+        let layers = ::DefaultLayers::to_u32();
+
         let mut c = ::BitSet::default();
-        for i in 0..(usize_bits.pow(3) * 2) {
+        for i in 0..(usize_bits.pow(layers) * 2) {
             assert!(!c.add(i as u32));
         }
 
