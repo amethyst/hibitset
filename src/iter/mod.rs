@@ -1,7 +1,7 @@
 use util::*;
 use {BitSet, BitSetLike};
 
-use typenum::{Add1, B1};
+use typenum::{Add1, B1, Unsigned};
 use generic_array::{ArrayLength, GenericArray};
 
 use std::ops::Add;
@@ -12,15 +12,23 @@ pub use self::parallel::{BitParIter, BitProducer};
 #[cfg(feature="parallel")]
 mod parallel;
 
+/// Trait to clean up signatures of bitset iteration.
+pub trait BitIterableNum: Add<B1> + ArrayLength<u32> + ArrayLength<Vec<usize>> {}
+
+impl<N> BitIterableNum for N
+where N: Unsigned +
+         Add<B1> +
+         ArrayLength<u32> +
+         ArrayLength<Vec<usize>>
+{}
+
 /// An `Iterator` over a [`BitSetLike`] structure.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
 pub struct BitIter<T: BitSetLike<N>, N>
-    where N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     pub(crate) set: T,
     pub(crate) masks: GenericArray<usize, Add1<N>>,
@@ -28,10 +36,8 @@ pub struct BitIter<T: BitSetLike<N>, N>
 }
 
 impl<T: BitSetLike<N>, N> BitIter<T, N>
-    where N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     /// Creates a new `BitIter`. You usually don't call this function
     /// but just [`.iter()`] on a bit set.
@@ -47,10 +53,8 @@ impl<T: BitSetLike<N>, N> BitIter<T, N>
 }
 
 impl<T: BitSetLike<N>, N> BitIter<T, N>
-    where N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     /// Allows checking if set bit is contained in underlying bit set.
     pub fn contains(&self, i: Index) -> bool {
@@ -59,11 +63,8 @@ impl<T: BitSetLike<N>, N> BitIter<T, N>
 }
 
 impl<'a, N> BitIter<&'a mut BitSet<N>, N>
-    where BitSet<N>: BitSetLike<N>,
-          N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     /// Clears the rest of the bitset starting from the next inner layer.
     pub(crate) fn clear(&mut self) {
@@ -87,10 +88,8 @@ pub(crate) enum State {
 }
 
 impl<T: BitSetLike<N>, N> Iterator for BitIter<T, N>
-    where N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     type Item = Index;
 
@@ -111,10 +110,8 @@ impl<T: BitSetLike<N>, N> Iterator for BitIter<T, N>
 }
 
 impl<T: BitSetLike<N>, N> BitIter<T, N>
-    where N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     pub(crate) fn handle_level(&mut self, level: usize) -> State {
         use self::State::*;

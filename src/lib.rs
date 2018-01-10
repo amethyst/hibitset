@@ -14,10 +14,8 @@ extern crate rayon;
 #[cfg(test)]
 extern crate rand;
 
-use typenum::{Add1, B1};
+use typenum::Add1;
 use generic_array::{ArrayLength, GenericArray};
-
-use std::ops::Add;
 
 mod atomic;
 mod iter;
@@ -27,7 +25,7 @@ mod util;
 pub use atomic::AtomicBitSet;
 pub use iter::BitIter;
 #[cfg(feature="parallel")]
-pub use iter::{BitParIter, BitProducer};
+pub use iter::{BitParIter, BitProducer, BitIterableNum};
 pub use ops::{BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
 
 use util::*;
@@ -200,11 +198,9 @@ impl<N: ArrayLength<Vec<usize>>> BitSet<N> {
 /// This arrangement allows for rapid jumps across the key-space.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
-pub trait BitSetLike<N: ArrayLength<Vec<usize>>>
-    where N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>,
+pub trait BitSetLike<N = DefaultLayers>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     /// Gets the `usize` corresponding to layer and index.
     ///
@@ -239,10 +235,8 @@ pub trait BitSetLike<N: ArrayLength<Vec<usize>>>
 
 impl<'a, T, N> BitSetLike<N> for &'a T
     where T: BitSetLike<N>,
-          N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>,
+          N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
         (*self).get_from_layer(layer, idx)
@@ -261,10 +255,8 @@ impl<'a, T, N> BitSetLike<N> for &'a T
 
 impl<'a, T, N> BitSetLike<N> for &'a mut T
     where T: BitSetLike<N>,
-          N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>,
+          N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
         (**self).get_from_layer(layer, idx)
@@ -282,10 +274,8 @@ impl<'a, T, N> BitSetLike<N> for &'a mut T
 }
 
 impl<N> BitSetLike<N> for BitSet<N>
-    where N: Add<B1>,
-          Add1<N>: ArrayLength<usize>,
-          N: ArrayLength<u32>,
-          N: ArrayLength<Vec<usize>>,
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
 
     fn get_from_layer(&self, layer: usize, idx: usize) -> usize {

@@ -3,13 +3,19 @@ use generic_array::{GenericArray, ArrayLength};
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
-use typenum::{Add1, B1, Unsigned};
+use typenum::{Add1, Unsigned};
 
-use std::ops::Add;
 use std::marker::PhantomData;
 
-use iter::{BITS, BitSetLike, BitIter, Index};
+use iter::{BITS, BitSetLike, BitIter, Index, BitIterableNum};
 use util::average_ones;
+
+/// Trait to clean up signatures of parallel bitset iteration.
+pub trait BitParIterableNum: BitIterableNum + Send + Sync {}
+
+impl<N> BitParIterableNum for N
+where N: BitIterableNum + Send + Sync,
+{}
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
@@ -58,14 +64,11 @@ impl<T, N: Unsigned> BitParIter<T, N> {
 
 impl<T, N> ParallelIterator for BitParIter<T, N>
     where T: BitSetLike<N> + Send + Sync,
-          N: Add<B1> + Send + Sync,
+          N: BitParIterableNum,
           Add1<N>: ArrayLength<usize> + Send + Sync,
           <Add1<N> as ArrayLength<usize>>::ArrayType: Send + Sync,
-          N: ArrayLength<u32> + Send + Sync,
           <N as ArrayLength<u32>>::ArrayType: Send + Sync,
-          N: ArrayLength<Vec<usize>> + Send + Sync,
           <N as ArrayLength<Vec<usize>>>::ArrayType: Send + Sync,
-    
 {
     type Item = Index;
 
@@ -82,21 +85,18 @@ impl<T, N> ParallelIterator for BitParIter<T, N>
 /// Usually used internally by `BitParIter`.
 #[derive(Debug)]
 pub struct BitProducer<'a, T: 'a + Send + Sync, N>(pub BitIter<&'a T, N>, pub u8)
-    where N: Add<B1>,
-        Add1<N>: ArrayLength<usize>,
-        N: ArrayLength<u32>,
-        N: ArrayLength<Vec<usize>>,
-        &'a T: BitSetLike<N>;
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>,
+          &'a T: BitSetLike<N>;
 
-impl<'a, T: 'a + Send + Sync, N> UnindexedProducer for BitProducer<'a, T, N>
-    where N: Add<B1> + Send + Sync,
-        Add1<N>: ArrayLength<usize> + Send + Sync,
-        <Add1<N> as ArrayLength<usize>>::ArrayType: Send + Sync,
-        N: ArrayLength<u32> + Send + Sync,
-        <N as ArrayLength<u32>>::ArrayType: Send + Sync,
-        N: ArrayLength<Vec<usize>> + Send + Sync,
-        <N as ArrayLength<Vec<usize>>>::ArrayType: Send + Sync,
-        &'a T: BitSetLike<N> + Send + Sync
+impl<'a, T, N> UnindexedProducer for BitProducer<'a, T, N>
+    where T: 'a + Send + Sync,
+          N: BitParIterableNum,
+          Add1<N>: ArrayLength<usize> + Send + Sync,
+          <Add1<N> as ArrayLength<usize>>::ArrayType: Send + Sync,
+          <N as ArrayLength<u32>>::ArrayType: Send + Sync,
+          <N as ArrayLength<Vec<usize>>>::ArrayType: Send + Sync,
+          &'a T: BitSetLike<N> + Send + Sync
 {
     type Item = Index;
 
@@ -186,22 +186,18 @@ mod test_bit_producer {
 
     use rayon::iter::plumbing::UnindexedProducer;
 
-    use typenum::{Add1, B1, Unsigned};
+    use typenum::{Add1, Unsigned};
 
-    use std::ops::Add;
-
-    use super::BitProducer;
+    use super::{BitProducer, BitParIterableNum};
     use iter::{BitSet, BitSetLike};
     use util::BITS;
 
     fn test_splitting(split_levels: u8) {
         fn visit<'a, N>(mut us: BitProducer<BitSet<N>, N>, d: usize, i: usize, mut trail: String, c: &mut usize)
-            where N: Add<B1> + Send + Sync,
+            where N: BitParIterableNum,
                   Add1<N>: ArrayLength<usize> + Send + Sync,
                   <Add1<N> as ArrayLength<usize>>::ArrayType: Send + Sync,
-                  N: ArrayLength<u32> + Send + Sync,
                   <N as ArrayLength<u32>>::ArrayType: Send + Sync,
-                  N: ArrayLength<Vec<usize>> + Send + Sync,
                   <N as ArrayLength<Vec<usize>>>::ArrayType: Send + Sync,
                   BitSet<N>: BitSetLike<N>,
         {
