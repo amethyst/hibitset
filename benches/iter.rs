@@ -8,7 +8,7 @@ extern crate rayon;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 
-use hibitset::{BitSet, BitSetLike};
+use hibitset::{BitSet, BitSetLike, DefaultLayers};
 
 use test::{Bencher, black_box};
 
@@ -24,7 +24,7 @@ enum Mode {
 
 fn bench(n: usize, mode: Mode, b: &mut Bencher) {
     let mut rng = XorShiftRng::new_unseeded();
-    let mut bitset = BitSet::with_capacity(1048576);
+    let mut bitset = BitSet::<DefaultLayers>::with_capacity(1048576);
     for _ in 0..n {
         let index = rng.gen_range(0, 1048576);
         bitset.add(index);
@@ -118,7 +118,7 @@ mod par {
 
     fn bench_payload(n: usize, splits: u8, payload: u32, b: &mut Bencher) {
         let mut rng = XorShiftRng::new_unseeded();
-        let mut bitset = BitSet::with_capacity(1048576);
+        let mut bitset = BitSet::<DefaultLayers>::with_capacity(1048576);
         for _ in 0..n {
             let index = rng.gen_range(0, 1048576);
             bitset.add(index);
