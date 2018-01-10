@@ -558,13 +558,13 @@ mod tests {
     fn and_assign_specific() {
         use util::BITS;
 
-        let mut c1 = BitSet::<::DefaultLayers>::new();
+        let mut c1 = BitSet::default();
         c1.add(0);
         let common = ((1 << BITS) << BITS) << BITS;
         c1.add(common);
         c1.add((((1 << BITS) << BITS) + 1) << BITS);
 
-        let mut c2 = BitSet::<::DefaultLayers>::new();
+        let mut c2 = BitSet::default();
         c2.add(common);
         c2.add((((1 << BITS) << BITS) + 2) << BITS);
 
@@ -577,11 +577,11 @@ mod tests {
     fn and_assign_with_modification() {
         use util::BITS;
 
-        let mut c1 = BitSet::<::DefaultLayers>::new();
+        let mut c1 = BitSet::default();
         c1.add(0);
         c1.add((1 << BITS) << BITS);
 
-        let mut c2 = BitSet::<::DefaultLayers>::new();
+        let mut c2 = BitSet::default();
         c2.add(0);
 
         c1 &= &c2;
@@ -656,14 +656,14 @@ mod tests {
     fn xor_assign_specific() {
         use util::BITS;
 
-        let mut c1 = BitSet::<::DefaultLayers>::new();
+        let mut c1 = BitSet::default();
         c1.add(0);
         let common = ((1 << BITS) << BITS) << BITS;
         c1.add(common);
         let a = (((1 << BITS) + 1) << BITS) << BITS;
         c1.add(a);
 
-        let mut c2 = BitSet::<::DefaultLayers>::new();
+        let mut c2 = BitSet::default();
         c2.add(common);
         let b = (((1 << BITS) + 2) << BITS) << BITS;
         c2.add(b);
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn operators() {
-        let mut bitset = BitSet::<::DefaultLayers>::new();
+        let mut bitset = BitSet::default();
         bitset.add(1);
         bitset.add(3);
         bitset.add(5);
@@ -763,13 +763,13 @@ mod tests {
     #[test]
     fn xor() {
         // 0011
-        let mut bitset = BitSet::<::DefaultLayers>::new();
+        let mut bitset = BitSet::default();
         bitset.add(2);
         bitset.add(3);
         bitset.add(50000);
 
         // 0101
-        let mut other = BitSet::<::DefaultLayers>::new();
+        let mut other = BitSet::default();
         other.add(1);
         other.add(3);
         other.add(50000);

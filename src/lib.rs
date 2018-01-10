@@ -41,10 +41,16 @@ pub type DefaultLayers = typenum::U3;
 ///
 /// Note, a `BitSet` is limited by design to only `1,048,576` indices.
 /// Adding beyond this limit will cause the `BitSet` to panic.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct BitSet<N: ArrayLength<Vec<usize>> = DefaultLayers> {
     top_layer: usize,
     layers: GenericArray<Vec<usize>, N>,
+}
+
+impl Default for BitSet<DefaultLayers> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<N: ArrayLength<Vec<usize>>> BitSet<N> {
@@ -301,7 +307,7 @@ mod tests {
 
     #[test]
     fn insert() {
-        let mut c = BitSet::<::DefaultLayers>::new();
+        let mut c = BitSet::default();
         for i in 0..1_000 {
             assert!(!c.add(i));
             assert!(c.add(i));
@@ -314,7 +320,7 @@ mod tests {
 
     #[test]
     fn insert_100k() {
-        let mut c = BitSet::<::DefaultLayers>::new();
+        let mut c = BitSet::default();
         for i in 0..100_000 {
             assert!(!c.add(i));
             assert!(c.add(i));
@@ -326,7 +332,7 @@ mod tests {
     }
     #[test]
     fn remove() {
-        let mut c = BitSet::<::DefaultLayers>::new();
+        let mut c = BitSet::default();
         for i in 0..1_000 {
             assert!(!c.add(i));
         }
@@ -341,7 +347,7 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut c = BitSet::<::DefaultLayers>::new();
+        let mut c = BitSet::default();
         for i in 0..100_000 {
             c.add(i);
         }
@@ -356,8 +362,8 @@ mod tests {
 
     #[test]
     fn iter_odd_even() {
-        let mut odd = BitSet::<::DefaultLayers>::new();
-        let mut even = BitSet::<::DefaultLayers>::new();
+        let mut odd = BitSet::default();
+        let mut even = BitSet::default();
         for i in 0..100_000 {
             if i % 2 == 1 {
                 odd.add(i);
@@ -374,7 +380,7 @@ mod tests {
     #[test]
     fn iter_random_add() {
         use rand::{Rng, weak_rng};
-        let mut set = BitSet::<::DefaultLayers>::new();
+        let mut set = BitSet::default();
         let mut rng = weak_rng();
         let limit = 1_048_576;
         let mut added = 0;
@@ -389,7 +395,7 @@ mod tests {
 
     #[test]
     fn iter_clusters() {
-        let mut set = BitSet::<::DefaultLayers>::new();
+        let mut set = BitSet::default();
         for x in 0..8 {
             let x = (x * 3) << (::BITS * 2); // scale to the last slot
             for y in 0..8 {
@@ -405,7 +411,7 @@ mod tests {
 
     #[test]
     fn not() {
-        let mut c = BitSet::<::DefaultLayers>::new();
+        let mut c = BitSet::default();
         for i in 0..10_000 {
             if i % 2 == 1 {
                 c.add(i);
@@ -429,11 +435,11 @@ mod test_parallel {
         let tests = 1_048_576 / step;
         for n in 0..tests {
             let n = n * step;
-            let mut set = BitSet::<::DefaultLayers>::new();
+            let mut set = BitSet::default();
             set.add(n);
             assert_eq!(set.par_iter().count(), 1);
         }
-        let mut set = BitSet::<::DefaultLayers>::new();
+        let mut set = BitSet::default();
         set.add(1_048_576 - 1);
         assert_eq!(set.par_iter().count(), 1);
     }
@@ -443,7 +449,7 @@ mod test_parallel {
         use rand::{Rng, weak_rng};
         use std::collections::HashSet;
         use std::sync::{Arc, Mutex};
-        let mut set = BitSet::<::DefaultLayers>::new();
+        let mut set = BitSet::default();
         let mut check_set = HashSet::new();
         let mut rng = weak_rng();
         let limit = 1_048_576;
@@ -480,8 +486,8 @@ mod test_parallel {
 
     #[test]
     fn par_iter_odd_even() {
-        let mut odd = BitSet::<::DefaultLayers>::new();
-        let mut even = BitSet::<::DefaultLayers>::new();
+        let mut odd = BitSet::default();
+        let mut even = BitSet::default();
         for i in 0..100_000 {
             if i % 2 == 1 {
                 odd.add(i);
@@ -499,7 +505,7 @@ mod test_parallel {
     fn par_iter_clusters() {
         use std::collections::HashSet;
         use std::sync::{Arc, Mutex};
-        let mut set = BitSet::<::DefaultLayers>::new();
+        let mut set = BitSet::default();
         let mut check_set = HashSet::new();
         for x in 0..8 {
             let x = (x * 3) << (::BITS * 2); // scale to the last slot
