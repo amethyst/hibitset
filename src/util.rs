@@ -8,10 +8,10 @@ pub const BITS: usize = 6;
 #[cfg(target_pointer_width= "32")]
 pub const BITS: usize = 5;
 /// Amount of layers in the hierarchical bitset.
-pub const LAYERS: usize = 4;
-pub const MAX: usize = BITS * LAYERS;
+const LAYERS: usize = 4;
+const MAX: usize = BITS * LAYERS;
 /// Maximum amount of bits per bitset.
-pub const MAX_EID: usize = 2 << MAX - 1;
+const MAX_EID: usize = 2 << MAX - 1;
 
 /// Layer0 shift (bottom layer, true bitset).
 pub const SHIFT0: usize = 0;

@@ -20,8 +20,11 @@ impl<'a, B, N> BitOrAssign<&'a B> for BitSet<N>
 {
     fn bitor_assign(&mut self, lhs: &B) {
         use iter::State::Continue;
+        let top_layer = N::to_usize();
+        let layers = top_layer + 1;
+
         let mut iter = lhs.iter();
-        while let Some(level) = (1..LAYERS).find(|&level| iter.handle_level(level) == Continue) {
+        while let Some(level) = (1..layers).find(|&level| iter.handle_level(level) == Continue) {
             let lower = level - 1;
             let idx = iter.prefix[lower] as usize >> BITS;
             *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
@@ -39,9 +42,12 @@ impl<'a, B, N> BitAndAssign<&'a B> for BitSet<N>
 {
     fn bitand_assign(&mut self, lhs: &B) {
         use iter::State::*;
+        let top_layer = N::to_usize();
+        let layers = top_layer + 1;
+
         let mut iter = lhs.iter();
-        iter.masks[LAYERS - 1] &= self.top_layer();
-        while let Some(level) = (1..LAYERS).find(|&level| iter.handle_level(level) == Continue) {
+        iter.masks[top_layer] &= self.top_layer();
+        while let Some(level) = (1..layers).find(|&level| iter.handle_level(level) == Continue) {
             let lower = level - 1;
             let idx = iter.prefix[lower] as usize >> BITS;
             let our_layer = self.get_from_layer(lower, idx);
@@ -56,7 +62,7 @@ impl<'a, B, N> BitAndAssign<&'a B> for BitSet<N>
             *self.layer_mut(lower, idx) &= their_layer;
         }
         let mut masks = GenericArray::default();
-        masks[LAYERS - 1] =  self.top_layer() & !lhs.top_layer();
+        masks[top_layer] = self.top_layer() & !lhs.top_layer();
         BitIter::new(&mut *self, masks, GenericArray::default()).clear();
 
         self.top_layer &= lhs.top_layer();
@@ -72,8 +78,11 @@ impl<'a, B, N> BitXorAssign<&'a B> for BitSet<N>
 {
     fn bitxor_assign(&mut self, lhs: &B) {
         use iter::State::*;
+        let top_layer = N::to_usize();
+        let layers = top_layer + 1;
+
         let mut iter = lhs.iter();
-        while let Some(level) = (1..LAYERS).find(|&level| iter.handle_level(level) == Continue) {
+        while let Some(level) = (1..layers).find(|&level| iter.handle_level(level) == Continue) {
             let lower = level - 1;
             let idx = iter.prefix[lower] as usize >> BITS;
 
@@ -95,7 +104,7 @@ impl<'a, B, N> BitXorAssign<&'a B> for BitSet<N>
 
                 change_bit(level);
                 if iter.masks[level] == 0 {
-                    (2..LAYERS).for_each(change_bit);
+                    (2..layers).for_each(change_bit);
                 }
             }
         }

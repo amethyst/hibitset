@@ -63,9 +63,11 @@ impl<N: ArrayLength<Vec<usize>>> BitSet<N> {
     }
 
     #[inline]
-    fn valid_range(max: Index) {
-        if (MAX_EID as u32) < max {
-            panic!("Expected index to be less then {}, found {}", MAX_EID, max);
+    fn valid_range(i: Index) {
+        let limit = BITS * (N::to_usize() + 1);
+        let max = 2 << (limit - 1);
+        if (max as u32) < i {
+            panic!("Expected index to be less then {}, found {}", max, i);
         }
     }
 

@@ -3,12 +3,12 @@ use generic_array::{GenericArray, ArrayLength};
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
-use typenum::{Add1, B1};
+use typenum::{Add1, B1, Unsigned};
 
 use std::ops::Add;
 use std::marker::PhantomData;
 
-use iter::{BITS, LAYERS, BitSetLike, BitIter, Index};
+use iter::{BITS, BitSetLike, BitIter, Index};
 use util::average_ones;
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
@@ -17,15 +17,15 @@ use util::average_ones;
 #[derive(Debug)]
 pub struct BitParIter<T, N>(T, u8, PhantomData<N>);
 
-impl<T, N> BitParIter<T, N> {
+impl<T, N: Unsigned> BitParIter<T, N> {
     /// Creates a new `BitParIter`. You usually don't call this function
     /// but just [`.par_iter()`] on a bit set.
     ///
-    /// Default layer split amount is 3.
+    /// By default all but lowest layer are split.
     ///
     /// [`.par_iter()`]: ../../trait.BitSetLike.html#method.par_iter
     pub fn new(set: T) -> Self {
-        BitParIter(set, 3, PhantomData)
+        BitParIter(set, N::to_u8(), PhantomData)
     }
 
     /// Sets how many layers are split when forking.
@@ -46,17 +46,11 @@ impl<T, N> BitParIter<T, N> {
     /// # }
     /// ```
     ///
-    /// The value should be in range [1, 3]
-    ///
-    /// | splits | largest smallest unit of work |
-    /// |--------|-------------------------------|
-    /// | 1      | usize_bits<sup>3</sup>        |
-    /// | 2      | usize_bits<sup>2</sup>        |
-    /// | 3      | usize_bits                    |
+    /// The value should be in range [1, N]
     ///
     pub fn layers_split(mut self, layers: u8) -> Self {
         assert!(layers >= 1);
-        assert!(layers <= 3);
+        assert!(layers <= N::to_u8());
         self.1 = layers;
         self
     }
@@ -169,7 +163,7 @@ impl<'a, T: 'a + Send + Sync, N> UnindexedProducer for BitProducer<'a, T, N>
                         None
                     })
             };
-            let top_layer = LAYERS - 1;
+            let top_layer = N::to_usize();
             let mut h = handle_level(top_layer);
             for i in 1..splits {
                 h = h.or_else(|| handle_level(top_layer - i as usize));
