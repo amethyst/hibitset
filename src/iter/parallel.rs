@@ -1,5 +1,12 @@
+use generic_array::{GenericArray, ArrayLength};
+
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
+
+use typenum::{Add1, B1};
+
+use std::ops::Add;
+use std::marker::PhantomData;
 
 use iter::{BITS, LAYERS, BitSetLike, BitIter, Index};
 use util::average_ones;
@@ -8,9 +15,9 @@ use util::average_ones;
 ///
 /// [`BitSetLike`]: ../../trait.BitSetLike.html
 #[derive(Debug)]
-pub struct BitParIter<T>(T, u8);
+pub struct BitParIter<T, N>(T, u8, PhantomData<N>);
 
-impl<T> BitParIter<T> {
+impl<T, N> BitParIter<T, N> {
     /// Creates a new `BitParIter`. You usually don't call this function
     /// but just [`.par_iter()`] on a bit set.
     ///
@@ -18,7 +25,7 @@ impl<T> BitParIter<T> {
     ///
     /// [`.par_iter()`]: ../../trait.BitSetLike.html#method.par_iter
     pub fn new(set: T) -> Self {
-        BitParIter(set, 3)
+        BitParIter(set, 3, PhantomData)
     }
 
     /// Sets how many layers are split when forking.
@@ -28,10 +35,11 @@ impl<T> BitParIter<T> {
     /// ```
     /// # extern crate rayon;
     /// # extern crate hibitset;
-    /// # use hibitset::{BitSet, BitSetLike};
+    /// # extern crate typenum;
+    /// # use hibitset::{BitSet, BitSetLike, DefaultLayers};
     /// # use rayon::iter::ParallelIterator;
     /// # fn main() {
-    /// let mut bitset = BitSet::new();
+    /// let mut bitset = BitSet::<DefaultLayers>::new();
     /// bitset.par_iter()
     ///     .layers_split(2)
     ///     .count();
@@ -54,8 +62,16 @@ impl<T> BitParIter<T> {
     }
 }
 
-impl<T> ParallelIterator for BitParIter<T>
-    where T: BitSetLike + Send + Sync,
+impl<T, N> ParallelIterator for BitParIter<T, N>
+    where T: BitSetLike<N> + Send + Sync,
+          N: Add<B1> + Send + Sync,
+          Add1<N>: ArrayLength<usize> + Send + Sync,
+          <Add1<N> as ArrayLength<usize>>::ArrayType: Send + Sync,
+          N: ArrayLength<u32> + Send + Sync,
+          <N as ArrayLength<u32>>::ArrayType: Send + Sync,
+          N: ArrayLength<Vec<usize>> + Send + Sync,
+          <N as ArrayLength<Vec<usize>>>::ArrayType: Send + Sync,
+    
 {
     type Item = Index;
 
@@ -71,10 +87,22 @@ impl<T> ParallelIterator for BitParIter<T>
 ///
 /// Usually used internally by `BitParIter`.
 #[derive(Debug)]
-pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>, pub u8);
+pub struct BitProducer<'a, T: 'a + Send + Sync, N>(pub BitIter<&'a T, N>, pub u8)
+    where N: Add<B1>,
+        Add1<N>: ArrayLength<usize>,
+        N: ArrayLength<u32>,
+        N: ArrayLength<Vec<usize>>,
+        &'a T: BitSetLike<N>;
 
-impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
-    where T: BitSetLike
+impl<'a, T: 'a + Send + Sync, N> UnindexedProducer for BitProducer<'a, T, N>
+    where N: Add<B1> + Send + Sync,
+        Add1<N>: ArrayLength<usize> + Send + Sync,
+        <Add1<N> as ArrayLength<usize>>::ArrayType: Send + Sync,
+        N: ArrayLength<u32> + Send + Sync,
+        <N as ArrayLength<u32>>::ArrayType: Send + Sync,
+        N: ArrayLength<Vec<usize>> + Send + Sync,
+        <N as ArrayLength<Vec<usize>>>::ArrayType: Send + Sync,
+        &'a T: BitSetLike<N> + Send + Sync
 {
     type Item = Index;
 
@@ -119,7 +147,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 average_ones(self.0.masks[level])
                     .and_then(|average_bit| {
                         let mask = (1 << average_bit) - 1;
-                        let mut other = BitProducer(BitIter::new(self.0.set, [0; LAYERS], [0; LAYERS - 1]), splits);
+                        let mut other = BitProducer(BitIter::new(self.0.set, GenericArray::default(), GenericArray::default()), splits);
                         // The `other` is the more significant half of the mask
                         other.0.masks[level] = self.0.masks[level] & !mask;
                         other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
@@ -160,17 +188,28 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
 
 #[cfg(test)]
 mod test_bit_producer {
+    use generic_array::ArrayLength;
+
     use rayon::iter::plumbing::UnindexedProducer;
 
+    use typenum::{Add1, B1};
+
+    use std::ops::Add;
+
     use super::BitProducer;
-    use iter::BitSetLike;
+    use iter::{BitSet, BitSetLike};
     use util::BITS;
 
     fn test_splitting(split_levels: u8) {
-        fn visit<T>(mut us: BitProducer<T>, d: usize, i: usize, mut trail: String, c: &mut usize)
-            where T: Send +
-                     Sync +
-                     BitSetLike
+        fn visit<'a, N>(mut us: BitProducer<BitSet<N>, N>, d: usize, i: usize, mut trail: String, c: &mut usize)
+            where N: Add<B1> + Send + Sync,
+                  Add1<N>: ArrayLength<usize> + Send + Sync,
+                  <Add1<N> as ArrayLength<usize>>::ArrayType: Send + Sync,
+                  N: ArrayLength<u32> + Send + Sync,
+                  <N as ArrayLength<u32>>::ArrayType: Send + Sync,
+                  N: ArrayLength<Vec<usize>> + Send + Sync,
+                  <N as ArrayLength<Vec<usize>>>::ArrayType: Send + Sync,
+                  BitSet<N>: BitSetLike<N>,
         {
             if d == 0 {
                 assert!(us.split().1.is_none(), trail);
@@ -191,7 +230,7 @@ mod test_bit_producer {
 
         let usize_bits = ::std::mem::size_of::<usize>() * 8;
 
-        let mut c = ::BitSet::new();
+        let mut c = ::BitSet::<::DefaultLayers>::new();
         for i in 0..(usize_bits.pow(3) * 2) {
             assert!(!c.add(i as u32));
         }

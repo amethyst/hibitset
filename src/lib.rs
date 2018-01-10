@@ -14,8 +14,10 @@ extern crate rayon;
 #[cfg(test)]
 extern crate rand;
 
-use typenum::U3;
+use typenum::{Add1, B1};
 use generic_array::{ArrayLength, GenericArray};
+
+use std::ops::Add;
 
 mod atomic;
 mod iter;
@@ -30,6 +32,9 @@ pub use ops::{BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
 
 use util::*;
 
+/// How many layers are there by default.
+pub type DefaultLayers = typenum::U3;
+
 /// A `BitSet` is a simple set designed to track entity indices for which
 /// a certain component exists. It does not track the `Generation` of the
 /// entities that it contains.
@@ -37,15 +42,18 @@ use util::*;
 /// Note, a `BitSet` is limited by design to only `1,048,576` indices.
 /// Adding beyond this limit will cause the `BitSet` to panic.
 #[derive(Clone, Debug, Default)]
-pub struct BitSet<N: ArrayLength<Vec<usize>> = U3> {
+pub struct BitSet<N: ArrayLength<Vec<usize>> = DefaultLayers> {
     top_layer: usize,
     layers: GenericArray<Vec<usize>, N>,
 }
 
-impl BitSet {
+impl<N: ArrayLength<Vec<usize>>> BitSet<N> {
     /// Creates an empty `BitSet`.
-    pub fn new() -> BitSet {
-        Default::default()
+    pub fn new() -> Self {
+        BitSet {
+            top_layer: 0,
+            layers: GenericArray::generate(|_| vec![]),
+        }
     }
 
     #[inline]
@@ -56,7 +64,7 @@ impl BitSet {
     }
 
     /// Creates an empty `BitSet`, preallocated for up to `max` indices.
-    pub fn with_capacity(max: Index) -> BitSet {
+    pub fn with_capacity(max: Index) -> Self {
         Self::valid_range(max);
         let mut value = BitSet::new();
         value.extend(max);
@@ -184,78 +192,57 @@ impl BitSet {
 /// This arrangement allows for rapid jumps across the key-space.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
-pub trait BitSetLike {
+pub trait BitSetLike<N: ArrayLength<Vec<usize>>>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>,
+{
     /// Gets the `usize` corresponding to layer and index.
     ///
-    /// The `layer` should be in the range [0, 3]
-    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
-        match layer {
-            0 => self.layer0(idx),
-            1 => self.layer1(idx),
-            2 => self.layer2(idx),
-            3 => self.layer3(),
-            _ => panic!("Invalid layer: {}", layer),
-        }
-    }
+    /// The `layer` should be in the range [0, N + 1]
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize;
 
-    /// Return a `usize` where each bit represents if any word in layer2
-    /// has been set.
-    fn layer3(&self) -> usize;
-
-    /// Return the `usize` from the array of usizes that indicates if any
-    /// bit has been set in layer1
-    fn layer2(&self, i: usize) -> usize;
-
-    /// Return the `usize` from the array of usizes that indicates if any
-    /// bit has been set in layer0
-    fn layer1(&self, i: usize) -> usize;
-
-    /// Return a `usize` that maps to the direct 1:1 association with
-    /// each index of the set
-    fn layer0(&self, i: usize) -> usize;
+    /// Returns an `usize` where each bit represents which words in the second highest
+    /// layer has been set.
+    fn top_layer(&self) -> usize;
 
     /// Allows checking if set bit is contained in the bit set.
     fn contains(&self, i: Index) -> bool;
 
     /// Create an iterator that will scan over the keyspace
-    fn iter(self) -> BitIter<Self>
+    fn iter(self) -> BitIter<Self, N>
         where Self: Sized
     {
-        let layer3 = self.layer3();
-
-        BitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
+        let mut masks = GenericArray::default();
+        let top_layer = masks.len() - 1;
+        masks[top_layer] = self.top_layer();
+        BitIter::new(self, masks, GenericArray::default())
     }
 
     /// Create a parallel iterator that will scan over the keyspace
     #[cfg(feature="parallel")]
-    fn par_iter(self) -> BitParIter<Self>
+    fn par_iter(self) -> BitParIter<Self, N>
         where Self: Sized
     {
         BitParIter::new(self)
     }
 }
 
-impl<'a, T> BitSetLike for &'a T
-    where T: BitSetLike
+impl<'a, T, N> BitSetLike<N> for &'a T
+    where T: BitSetLike<N>,
+          N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>,
 {
-    #[inline]
-    fn layer3(&self) -> usize {
-        (*self).layer3()
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        (*self).get_from_layer(layer, idx)
     }
 
     #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        (*self).layer2(i)
-    }
-
-    #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        (*self).layer1(i)
-    }
-
-    #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        (*self).layer0(i)
+    fn top_layer(&self) -> usize {
+        (*self).top_layer()
     }
 
     #[inline]
@@ -264,27 +251,20 @@ impl<'a, T> BitSetLike for &'a T
     }
 }
 
-impl<'a, T> BitSetLike for &'a mut T
-    where T: BitSetLike
+impl<'a, T, N> BitSetLike<N> for &'a mut T
+    where T: BitSetLike<N>,
+          N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>,
 {
-    #[inline]
-    fn layer3(&self) -> usize {
-        (**self).layer3()
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        (**self).get_from_layer(layer, idx)
     }
 
     #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        (**self).layer2(i)
-    }
-
-    #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        (**self).layer1(i)
-    }
-
-    #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        (**self).layer0(i)
+    fn top_layer(&self) -> usize {
+        (**self).top_layer()
     }
 
     #[inline]
@@ -293,30 +273,25 @@ impl<'a, T> BitSetLike for &'a mut T
     }
 }
 
-impl BitSetLike for BitSet {
+impl<N> BitSetLike<N> for BitSet<N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>,
+{
+
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        self.layers[layer].get(idx).cloned().unwrap_or(0)
+    }
+
     #[inline]
-    fn layer3(&self) -> usize {
+    fn top_layer(&self) -> usize {
         self.top_layer
     }
 
     #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        self.layers[2].get(i).map(|&x| x).unwrap_or(0)
-    }
-
-    #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        self.layers[1].get(i).map(|&x| x).unwrap_or(0)
-    }
-
-    #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        self.layers[0].get(i).map(|&x| x).unwrap_or(0)
-    }
-
-    #[inline]
     fn contains(&self, i: Index) -> bool {
-        self.contains(i)
+        (&self).contains(i)
     }
 }
 
@@ -326,7 +301,7 @@ mod tests {
 
     #[test]
     fn insert() {
-        let mut c = BitSet::new();
+        let mut c = BitSet::<::DefaultLayers>::new();
         for i in 0..1_000 {
             assert!(!c.add(i));
             assert!(c.add(i));
@@ -339,7 +314,7 @@ mod tests {
 
     #[test]
     fn insert_100k() {
-        let mut c = BitSet::new();
+        let mut c = BitSet::<::DefaultLayers>::new();
         for i in 0..100_000 {
             assert!(!c.add(i));
             assert!(c.add(i));
@@ -351,7 +326,7 @@ mod tests {
     }
     #[test]
     fn remove() {
-        let mut c = BitSet::new();
+        let mut c = BitSet::<::DefaultLayers>::new();
         for i in 0..1_000 {
             assert!(!c.add(i));
         }
@@ -366,7 +341,7 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut c = BitSet::new();
+        let mut c = BitSet::<::DefaultLayers>::new();
         for i in 0..100_000 {
             c.add(i);
         }
@@ -381,8 +356,8 @@ mod tests {
 
     #[test]
     fn iter_odd_even() {
-        let mut odd = BitSet::new();
-        let mut even = BitSet::new();
+        let mut odd = BitSet::<::DefaultLayers>::new();
+        let mut even = BitSet::<::DefaultLayers>::new();
         for i in 0..100_000 {
             if i % 2 == 1 {
                 odd.add(i);
@@ -393,13 +368,13 @@ mod tests {
 
         assert_eq!((&odd).iter().count(), 50_000);
         assert_eq!((&even).iter().count(), 50_000);
-        assert_eq!(BitSetAnd(&odd, &even).iter().count(), 0);
+        assert_eq!(BitSetAnd::new(&odd, &even).iter().count(), 0);
     }
 
     #[test]
     fn iter_random_add() {
         use rand::{Rng, weak_rng};
-        let mut set = BitSet::new();
+        let mut set = BitSet::<::DefaultLayers>::new();
         let mut rng = weak_rng();
         let limit = 1_048_576;
         let mut added = 0;
@@ -414,7 +389,7 @@ mod tests {
 
     #[test]
     fn iter_clusters() {
-        let mut set = BitSet::new();
+        let mut set = BitSet::<::DefaultLayers>::new();
         for x in 0..8 {
             let x = (x * 3) << (::BITS * 2); // scale to the last slot
             for y in 0..8 {
@@ -430,13 +405,13 @@ mod tests {
 
     #[test]
     fn not() {
-        let mut c = BitSet::new();
+        let mut c = BitSet::<::DefaultLayers>::new();
         for i in 0..10_000 {
             if i % 2 == 1 {
                 c.add(i);
             }
         }
-        let d = BitSetNot(c);
+        let d = BitSetNot::new(c);
         for (idx, i) in d.iter().take(5_000).enumerate() {
             assert_eq!(idx * 2, i as usize);
         }
@@ -454,11 +429,11 @@ mod test_parallel {
         let tests = 1_048_576 / step;
         for n in 0..tests {
             let n = n * step;
-            let mut set = BitSet::new();
+            let mut set = BitSet::<::DefaultLayers>::new();
             set.add(n);
             assert_eq!(set.par_iter().count(), 1);
         }
-        let mut set = BitSet::new();
+        let mut set = BitSet::<::DefaultLayers>::new();
         set.add(1_048_576 - 1);
         assert_eq!(set.par_iter().count(), 1);
     }
@@ -468,7 +443,7 @@ mod test_parallel {
         use rand::{Rng, weak_rng};
         use std::collections::HashSet;
         use std::sync::{Arc, Mutex};
-        let mut set = BitSet::new();
+        let mut set = BitSet::<::DefaultLayers>::new();
         let mut check_set = HashSet::new();
         let mut rng = weak_rng();
         let limit = 1_048_576;
@@ -505,8 +480,8 @@ mod test_parallel {
 
     #[test]
     fn par_iter_odd_even() {
-        let mut odd = BitSet::new();
-        let mut even = BitSet::new();
+        let mut odd = BitSet::<::DefaultLayers>::new();
+        let mut even = BitSet::<::DefaultLayers>::new();
         for i in 0..100_000 {
             if i % 2 == 1 {
                 odd.add(i);
@@ -517,14 +492,14 @@ mod test_parallel {
 
         assert_eq!((&odd).par_iter().count(), 50_000);
         assert_eq!((&even).par_iter().count(), 50_000);
-        assert_eq!(BitSetAnd(&odd, &even).par_iter().count(), 0);
+        assert_eq!(BitSetAnd::new(&odd, &even).par_iter().count(), 0);
     }
 
     #[test]
     fn par_iter_clusters() {
         use std::collections::HashSet;
         use std::sync::{Arc, Mutex};
-        let mut set = BitSet::new();
+        let mut set = BitSet::<::DefaultLayers>::new();
         let mut check_set = HashSet::new();
         for x in 0..8 {
             let x = (x * 3) << (::BITS * 2); // scale to the last slot

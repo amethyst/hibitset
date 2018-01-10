@@ -1,13 +1,22 @@
 
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
+use generic_array::{GenericArray, ArrayLength};
+
+use typenum::{Add1, B1};
+
+use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::iter::{FromIterator, IntoIterator};
+use std::marker::PhantomData as Phantom;
 
 use util::*;
 
 use {AtomicBitSet, BitIter, BitSet, BitSetLike};
 
-impl<'a, B> BitOrAssign<&'a B> for BitSet
-    where B: BitSetLike
+impl<'a, B, N> BitOrAssign<&'a B> for BitSet<N>
+    where B: BitSetLike<N>,
+          N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
 {
     fn bitor_assign(&mut self, lhs: &B) {
         use iter::State::Continue;
@@ -17,17 +26,21 @@ impl<'a, B> BitOrAssign<&'a B> for BitSet
             let idx = iter.prefix[lower] as usize >> BITS;
             *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
         }
-        self.top_layer |= lhs.layer3();
+        self.top_layer |= lhs.top_layer();
     }
 }
 
-impl<'a, B> BitAndAssign<&'a B> for BitSet
-    where B: BitSetLike
+impl<'a, B, N> BitAndAssign<&'a B> for BitSet<N>
+    where B: BitSetLike<N>,
+          N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
 {
     fn bitand_assign(&mut self, lhs: &B) {
         use iter::State::*;
         let mut iter = lhs.iter();
-        iter.masks[LAYERS - 1] &= self.layer3();
+        iter.masks[LAYERS - 1] &= self.top_layer();
         while let Some(level) = (1..LAYERS).find(|&level| iter.handle_level(level) == Continue) {
             let lower = level - 1;
             let idx = iter.prefix[lower] as usize >> BITS;
@@ -36,22 +49,26 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
 
             iter.masks[lower] &= our_layer;
 
-            let mut masks = [0; LAYERS];
+            let mut masks = GenericArray::default();
             masks[lower] = our_layer & !their_layer;
-            BitIter::new(&mut *self, masks, iter.prefix).clear();
+            BitIter::new(&mut *self, masks, iter.prefix.clone()).clear();
 
             *self.layer_mut(lower, idx) &= their_layer;
         }
-        let mut masks = [0; LAYERS];
-        masks[LAYERS - 1] =  self.layer3() & !lhs.layer3();
-        BitIter::new(&mut *self, masks, [0; LAYERS - 1]).clear();
+        let mut masks = GenericArray::default();
+        masks[LAYERS - 1] =  self.top_layer() & !lhs.top_layer();
+        BitIter::new(&mut *self, masks, GenericArray::default()).clear();
 
-        self.top_layer &= lhs.layer3();
+        self.top_layer &= lhs.top_layer();
     }
 }
 
-impl<'a, B> BitXorAssign<&'a B> for BitSet
-    where B: BitSetLike
+impl<'a, B, N> BitXorAssign<&'a B> for BitSet<N>
+    where B: BitSetLike<N>,
+          N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
 {
     fn bitxor_assign(&mut self, lhs: &B) {
         use iter::State::*;
@@ -91,25 +108,41 @@ impl<'a, B> BitXorAssign<&'a B> for BitSet
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
-pub struct BitSetAnd<A: BitSetLike, B: BitSetLike>(pub A, pub B);
+pub struct BitSetAnd<A: BitSetLike<N>, B: BitSetLike<N>, N>(pub A, pub B, pub Phantom<N>)
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>;
 
-impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
-    #[inline]
-    fn layer3(&self) -> usize {
-        self.0.layer3() & self.1.layer3()
+
+impl<A: BitSetLike<N>, B: BitSetLike<N>, N> BitSetAnd<A, B, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
+    /// Constructs lazy *and* operation between `BitSetLike`s
+    pub fn new(a: A, b: B) -> Self {
+        BitSetAnd(a, b, Phantom)
     }
+}
+
+impl<A: BitSetLike<N>, B: BitSetLike<N>, N> BitSetLike<N> for BitSetAnd<A, B, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
     #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        self.0.layer2(i) & self.1.layer2(i)
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        self.0.get_from_layer(layer, idx) & self.1.get_from_layer(layer, idx)
     }
+
     #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        self.0.layer1(i) & self.1.layer1(i)
+    fn top_layer(&self) -> usize {
+        self.0.top_layer() & self.1.top_layer()
     }
-    #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        self.0.layer0(i) & self.1.layer0(i)
-    }
+
     #[inline]
     fn contains(&self, i: Index) -> bool {
         self.0.contains(i) && self.1.contains(i)
@@ -122,25 +155,40 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
-pub struct BitSetOr<A: BitSetLike, B: BitSetLike>(pub A, pub B);
+pub struct BitSetOr<A: BitSetLike<N>, B: BitSetLike<N>, N>(pub A, pub B, pub Phantom<N>)
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>;
 
-impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
-    #[inline]
-    fn layer3(&self) -> usize {
-        self.0.layer3() | self.1.layer3()
+impl<A: BitSetLike<N>, B: BitSetLike<N>, N> BitSetOr<A, B, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
+    /// Constructs lazy *or* operation between `BitSetLike`s
+    pub fn new(a: A, b: B) -> Self {
+        BitSetOr(a, b, Phantom)
     }
+}
+
+impl<A: BitSetLike<N>, B: BitSetLike<N>, N> BitSetLike<N> for BitSetOr<A, B, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
     #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        self.0.layer2(i) | self.1.layer2(i)
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        self.0.get_from_layer(layer, idx) | self.1.get_from_layer(layer, idx)
     }
+
     #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        self.0.layer1(i) | self.1.layer1(i)
+    fn top_layer(&self) -> usize {
+        self.0.top_layer() | self.1.top_layer()
     }
-    #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        self.0.layer0(i) | self.1.layer0(i)
-    }
+
     #[inline]
     fn contains(&self, i: Index) -> bool {
         self.0.contains(i) || self.1.contains(i)
@@ -152,25 +200,44 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
-pub struct BitSetNot<A: BitSetLike>(pub A);
+pub struct BitSetNot<A: BitSetLike<N>, N>(pub A, pub Phantom<N>)
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>;
 
-impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
+impl<A: BitSetLike<N>, N> BitSetNot<A, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
+    /// Constructs lazy *not* operation for `BitSetLike`
+    pub fn new(a: A) -> Self {
+        BitSetNot(a, Phantom)
+    }
+}
+
+impl<A: BitSetLike<N>, N> BitSetLike<N> for BitSetNot<A, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
     #[inline]
-    fn layer3(&self) -> usize {
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        if layer > 0 {
+            !0
+        } else {
+            !self.0.get_from_layer(0, idx)
+        }
+    }
+
+    #[inline]
+    fn top_layer(&self) -> usize {
         !0
     }
-    #[inline]
-    fn layer2(&self, _: usize) -> usize {
-        !0
-    }
-    #[inline]
-    fn layer1(&self, _: usize) -> usize {
-        !0
-    }
-    #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        !self.0.layer0(i)
-    }
+
     #[inline]
     fn contains(&self, i: Index) -> bool {
         !self.0.contains(i)
@@ -183,84 +250,127 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
-pub struct BitSetXor<A: BitSetLike, B: BitSetLike>(pub A, pub B);
+pub struct BitSetXor<A: BitSetLike<N>, B: BitSetLike<N>, N>(pub A, pub B, pub Phantom<N>)
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>;
 
-impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
-    #[inline]
-    fn layer3(&self) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
-        xor.layer3()
+impl<A: BitSetLike<N>, B: BitSetLike<N>, N> BitSetXor<A, B, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
+    /// Constructs lazy *xor* operation between `BitSetLike`s
+    pub fn new(a: A, b: B) -> Self {
+        BitSetXor(a, b, Phantom)
     }
+}
+
+impl<A: BitSetLike<N>, B: BitSetLike<N>, N> BitSetLike<N> for BitSetXor<A, B, N>
+    where N: Add<B1>,
+          Add1<N>: ArrayLength<usize>,
+          N: ArrayLength<u32>,
+          N: ArrayLength<Vec<usize>>
+{
+
     #[inline]
-    fn layer2(&self, id: usize) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
-        xor.layer2(id)
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        use BitSetAnd as And;
+        use BitSetOr as Or;
+        use BitSetNot as Not;
+        let xor = And::new(Or::new(&self.0, &self.1), Not::new(And::new(&self.0, &self.1)));
+        xor.get_from_layer(layer, idx)
     }
+
     #[inline]
-    fn layer1(&self, id: usize) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
-        xor.layer1(id)
+    fn top_layer(&self) -> usize {
+        use BitSetAnd as And;
+        use BitSetOr as Or;
+        use BitSetNot as Not;
+        let xor = And::new(Or::new(&self.0, &self.1), Not::new(And::new(&self.0, &self.1)));
+        xor.top_layer()
     }
-    #[inline]
-    fn layer0(&self, id: usize) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
-        xor.layer0(id)
-    }
+
     #[inline]
     fn contains(&self, i: Index) -> bool {
-        BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1))).contains(i)
+        use BitSetAnd as And;
+        use BitSetOr as Or;
+        use BitSetNot as Not;
+        And::new(Or::new(&self.0, &self.1), Not::new(And::new(&self.0, &self.1))).contains(i)
     }
 
 }
 
 macro_rules! operator {
-    ( impl < ( $( $lifetime:tt )* ) ( $( $arg:ident ),* ) > for $bitset:ty ) => {
-        impl<$( $lifetime, )* $( $arg ),*> IntoIterator for $bitset
-            where $( $arg: BitSetLike ),*
+    ( impl < ( $( $lifetime:tt )* ) ( $( $arg:ident ),* ) > for $($bitset:tt)+ ) => {
+        impl<$( $lifetime, )* $( $arg, )* N> IntoIterator for $($bitset)+<$( $arg, )* N>
+            where $( $arg: BitSetLike<N>, )*
+                  N: ::std::ops::Add<::typenum::B1>,
+                  ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                  N: ::generic_array::ArrayLength<u32>,
+                  N: ::generic_array::ArrayLength<Vec<usize>>,
         {
-            type Item = <BitIter<Self> as Iterator>::Item;
-            type IntoIter = BitIter<Self>;
+            type Item = <BitIter<Self, N> as Iterator>::Item;
+            type IntoIter = BitIter<Self, N>;
             fn into_iter(self) -> Self::IntoIter {
                 self.iter()
             }
         }
 
-        impl<$( $lifetime, )* $( $arg ),*> Not for $bitset
-            where $( $arg: BitSetLike ),*
+        impl<$( $lifetime, )* $( $arg, )* N> Not for $($bitset)+<$( $arg, )* N>
+            where $( $arg: BitSetLike<N>, )*
+                  N: ::std::ops::Add<::typenum::B1>,
+                  ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                  N: ::generic_array::ArrayLength<u32>,
+                  N: ::generic_array::ArrayLength<Vec<usize>>,
         {
-            type Output = BitSetNot<Self>;
+            type Output = BitSetNot<Self, N>;
             fn not(self) -> Self::Output {
-                BitSetNot(self)
+                BitSetNot(self, Phantom)
             }
         }
 
-        impl<$( $lifetime, )* $( $arg, )* T> BitAnd<T> for $bitset
-            where T: BitSetLike,
-                  $( $arg: BitSetLike ),*
+        impl<$( $lifetime, )* $( $arg, )* T, N> BitAnd<T> for $($bitset)+<$( $arg, )* N>
+            where T: BitSetLike<N>,
+                  $( $arg: BitSetLike<N>, )*
+                  N: ::std::ops::Add<::typenum::B1>,
+                  ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                  N: ::generic_array::ArrayLength<u32>,
+                  N: ::generic_array::ArrayLength<Vec<usize>>,
         {
-            type Output = BitSetAnd<Self, T>;
+            type Output = BitSetAnd<Self, T, N>;
             fn bitand(self, rhs: T) -> Self::Output {
-                BitSetAnd(self, rhs)
+                BitSetAnd(self, rhs, Phantom)
             }
         }
 
-        impl<$( $lifetime, )* $( $arg, )* T> BitOr<T> for $bitset
-            where T: BitSetLike,
-                  $( $arg: BitSetLike ),*
+        impl<$( $lifetime, )* $( $arg, )* T, N> BitOr<T> for $($bitset)+<$( $arg, )* N>
+            where T: BitSetLike<N>,
+                  $( $arg: BitSetLike<N>, )*
+                  N: ::std::ops::Add<::typenum::B1>,
+                  ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                  N: ::generic_array::ArrayLength<u32>,
+                  N: ::generic_array::ArrayLength<Vec<usize>>,
         {
-            type Output = BitSetOr<Self, T>;
+            type Output = BitSetOr<Self, T, N>;
             fn bitor(self, rhs: T) -> Self::Output {
-                BitSetOr(self, rhs)
+                BitSetOr(self, rhs, Phantom)
             }
         }
 
-        impl<$( $lifetime, )* $( $arg, )* T> BitXor<T> for $bitset
-            where T: BitSetLike,
-                  $( $arg: BitSetLike ),*
+        impl<$( $lifetime, )* $( $arg, )* T, N> BitXor<T> for $($bitset)+<$( $arg, )* N>
+            where T: BitSetLike<N>,
+                  $( $arg: BitSetLike<N>, )*
+                  N: ::std::ops::Add<::typenum::B1>,
+                  ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                  N: ::generic_array::ArrayLength<u32>,
+                  N: ::generic_array::ArrayLength<Vec<usize>>,
         {
-            type Output = BitSetXor<Self, T>;
+            type Output = BitSetXor<Self, T, N>;
             fn bitxor(self, rhs: T) -> Self::Output {
-                BitSetXor(self, rhs)
+                BitSetXor(self, rhs, Phantom)
             }
         }
 
@@ -269,25 +379,30 @@ macro_rules! operator {
 
 operator!(impl<()()> for BitSet);
 operator!(impl<('a)()> for &'a BitSet);
-operator!(impl<()()> for AtomicBitSet);
-operator!(impl<('a)()> for &'a AtomicBitSet);
-operator!(impl<()(A)> for BitSetNot<A>);
-operator!(impl<('a)(A)> for &'a BitSetNot<A>);
-operator!(impl<()(A, B)> for BitSetAnd<A, B>);
-operator!(impl<('a)(A, B)> for &'a BitSetAnd<A, B>);
-operator!(impl<()(A, B)> for BitSetOr<A, B>);
-operator!(impl<('a)(A, B)> for &'a BitSetOr<A, B>);
-operator!(impl<()(A, B)> for BitSetXor<A, B>);
-operator!(impl<('a)(A, B)> for &'a BitSetXor<A, B>);
+//operator!(impl<()()> for AtomicBitSet);
+//operator!(impl<('a)()> for &'a AtomicBitSet);
+operator!(impl<()(A)> for BitSetNot);
+operator!(impl<('a)(A)> for &'a BitSetNot);
+operator!(impl<()(A, B)> for BitSetAnd);
+operator!(impl<('a)(A, B)> for &'a BitSetAnd);
+operator!(impl<()(A, B)> for BitSetOr);
+operator!(impl<('a)(A, B)> for &'a BitSetOr);
+operator!(impl<()(A, B)> for BitSetXor);
+operator!(impl<('a)(A, B)> for &'a BitSetXor);
 
 macro_rules! iterator {
-    ( $bitset:ident ) => {
-        impl FromIterator<Index> for $bitset {
+    ( $($bitset:tt)+ ) => {
+        impl<N> FromIterator<Index> for $($bitset)+<N>
+        where N: ::std::ops::Add<::typenum::B1>,
+                ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                N: ::generic_array::ArrayLength<u32>,
+                N: ::generic_array::ArrayLength<Vec<usize>>,
+        {
             fn from_iter<T>(iter: T) -> Self
             where
                 T: IntoIterator<Item = Index>,
             {
-                let mut bitset = $bitset::new();
+                let mut bitset = $($bitset)+::new();
                 for item in iter {
                     bitset.add(item);
                 }
@@ -295,12 +410,17 @@ macro_rules! iterator {
             }
         }
         
-        impl<'a> FromIterator<&'a Index> for $bitset {
+        impl<'a, N> FromIterator<&'a Index> for $($bitset)+<N>
+        where N: ::std::ops::Add<::typenum::B1>,
+                ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                N: ::generic_array::ArrayLength<u32>,
+                N: ::generic_array::ArrayLength<Vec<usize>>,
+        {
             fn from_iter<T>(iter: T) -> Self
             where
                 T: IntoIterator<Item = &'a Index>,
             {
-                let mut bitset = $bitset::new();
+                let mut bitset = $($bitset)+::new();
                 for item in iter {
                     bitset.add(*item);
                 }
@@ -308,7 +428,12 @@ macro_rules! iterator {
             }
         }
 
-        impl Extend<Index> for $bitset {
+        impl<N> Extend<Index> for $($bitset)+<N>
+            where N: ::std::ops::Add<::typenum::B1>,
+                  ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                  N: ::generic_array::ArrayLength<u32>,
+                  N: ::generic_array::ArrayLength<Vec<usize>>,
+        {
             fn extend<T>(&mut self, iter: T)
             where
                 T: IntoIterator<Item = Index>,
@@ -319,7 +444,12 @@ macro_rules! iterator {
             }
         }
 
-        impl<'a> Extend<&'a Index> for $bitset {
+        impl<'a, N> Extend<&'a Index> for $($bitset)+<N>
+        where N: ::std::ops::Add<::typenum::B1>,
+                ::typenum::Add1<N>: ::generic_array::ArrayLength<usize>,
+                N: ::generic_array::ArrayLength<u32>,
+                N: ::generic_array::ArrayLength<Vec<usize>>,
+        {
             fn extend<T>(&mut self, iter: T)
             where
                 T: IntoIterator<Item = &'a Index>,
@@ -334,7 +464,7 @@ macro_rules! iterator {
 }
 
 iterator!(BitSet);
-iterator!(AtomicBitSet);
+//iterator!(AtomicBitSet);
 
 #[cfg(test)]
 mod tests {
@@ -350,8 +480,8 @@ mod tests {
         let f1 = &|n| 7 * usize_bits * n;
         let f2 = &|n| 13 * usize_bits * n;
 
-        let mut c1: BitSet = (0..n).map(f1).collect();
-        let c2: BitSet = (0..n).map(f2).collect();
+        let mut c1: BitSet<::DefaultLayers> = (0..n).map(f1).collect();
+        let c2: BitSet<::DefaultLayers> = (0..n).map(f2).collect();
 
         c1 |= &c2;
 
@@ -370,7 +500,7 @@ mod tests {
         let limit = 1_048_576;
         let mut rng = weak_rng();
 
-        let mut set1 = BitSet::new();
+        let mut set1 = BitSet::<::DefaultLayers>::new();
         let mut check_set1 = HashSet::new();
         for _ in 0..(limit / 100) {
             let index = rng.gen_range(0, limit);
@@ -378,7 +508,7 @@ mod tests {
             check_set1.insert(index);
         }
         
-        let mut set2 = BitSet::new();
+        let mut set2 = BitSet::<::DefaultLayers>::new();
         let mut check_set2 = HashSet::new();
         for _ in 0..(limit / 100) {
             let index = rng.gen_range(0, limit);
@@ -411,8 +541,8 @@ mod tests {
         let f1 = &|n| 7 * usize_bits * n;
         let f2 = &|n| 13 * usize_bits * n;
 
-        let mut c1: BitSet = (0..n).map(f1).collect();
-        let c2: BitSet = (0..n).map(f2).collect();
+        let mut c1: BitSet<::DefaultLayers> = (0..n).map(f1).collect();
+        let c2: BitSet<::DefaultLayers> = (0..n).map(f2).collect();
 
         c1 &= &c2;
 
@@ -428,13 +558,13 @@ mod tests {
     fn and_assign_specific() {
         use util::BITS;
 
-        let mut c1 = BitSet::new();
+        let mut c1 = BitSet::<::DefaultLayers>::new();
         c1.add(0);
         let common = ((1 << BITS) << BITS) << BITS;
         c1.add(common);
         c1.add((((1 << BITS) << BITS) + 1) << BITS);
 
-        let mut c2: BitSet = BitSet::new();
+        let mut c2 = BitSet::<::DefaultLayers>::new();
         c2.add(common);
         c2.add((((1 << BITS) << BITS) + 2) << BITS);
 
@@ -447,11 +577,11 @@ mod tests {
     fn and_assign_with_modification() {
         use util::BITS;
 
-        let mut c1 = BitSet::new();
+        let mut c1 = BitSet::<::DefaultLayers>::new();
         c1.add(0);
         c1.add((1 << BITS) << BITS);
 
-        let mut c2: BitSet = BitSet::new();
+        let mut c2 = BitSet::<::DefaultLayers>::new();
         c2.add(0);
 
         c1 &= &c2;
@@ -469,7 +599,7 @@ mod tests {
         let limit = 1_048_576;
         let mut rng = weak_rng();
 
-        let mut set1 = BitSet::new();
+        let mut set1 = BitSet::<::DefaultLayers>::new();
         let mut check_set1 = HashSet::new();
         for _ in 0..(limit / 100) {
             let index = rng.gen_range(0, limit);
@@ -477,7 +607,7 @@ mod tests {
             check_set1.insert(index);
         }
         
-        let mut set2 = BitSet::new();
+        let mut set2 = BitSet::<::DefaultLayers>::new();
         let mut check_set2 = HashSet::new();
         for _ in 0..(limit / 100) {
             let index = rng.gen_range(0, limit);
@@ -510,8 +640,8 @@ mod tests {
         let f1 = &|n| 7 * usize_bits * n;
         let f2 = &|n| 13 * usize_bits * n;
 
-        let mut c1: BitSet = (0..n).map(f1).collect();
-        let c2: BitSet = (0..n).map(f2).collect();
+        let mut c1: BitSet<::DefaultLayers> = (0..n).map(f1).collect();
+        let c2: BitSet<::DefaultLayers> = (0..n).map(f2).collect();
         c1 ^= &c2;
 
         let h1: HashSet<_> = (0..n).map(f1).collect();
@@ -526,14 +656,14 @@ mod tests {
     fn xor_assign_specific() {
         use util::BITS;
 
-        let mut c1 = BitSet::new();
+        let mut c1 = BitSet::<::DefaultLayers>::new();
         c1.add(0);
         let common = ((1 << BITS) << BITS) << BITS;
         c1.add(common);
         let a = (((1 << BITS) + 1) << BITS) << BITS;
         c1.add(a);
 
-        let mut c2: BitSet = BitSet::new();
+        let mut c2 = BitSet::<::DefaultLayers>::new();
         c2.add(common);
         let b = (((1 << BITS) + 2) << BITS) << BITS;
         c2.add(b);
@@ -550,7 +680,7 @@ mod tests {
         let limit = 1_048_576;
         let mut rng = weak_rng();
 
-        let mut set1 = BitSet::new();
+        let mut set1 = BitSet::<::DefaultLayers>::new();
         let mut check_set1 = HashSet::new();
         for _ in 0..(limit / 100) {
             let index = rng.gen_range(0, limit);
@@ -558,7 +688,7 @@ mod tests {
             check_set1.insert(index);
         }
         
-        let mut set2 = BitSet::new();
+        let mut set2 = BitSet::<::DefaultLayers>::new();
         let mut check_set2 = HashSet::new();
         for _ in 0..(limit / 100) {
             let index = rng.gen_range(0, limit);
@@ -583,7 +713,7 @@ mod tests {
 
     #[test]
     fn operators() {
-        let mut bitset = BitSet::new();
+        let mut bitset = BitSet::<::DefaultLayers>::new();
         bitset.add(1);
         bitset.add(3);
         bitset.add(5);
@@ -633,13 +763,13 @@ mod tests {
     #[test]
     fn xor() {
         // 0011
-        let mut bitset = BitSet::new();
+        let mut bitset = BitSet::<::DefaultLayers>::new();
         bitset.add(2);
         bitset.add(3);
         bitset.add(50000);
 
         // 0101
-        let mut other = BitSet::new();
+        let mut other = BitSet::<::DefaultLayers>::new();
         other.add(1);
         other.add(3);
         other.add(50000);
@@ -647,7 +777,7 @@ mod tests {
 
         {
             // 0110
-            let xor = BitSetXor(&bitset, &other);
+            let xor = BitSetXor::new(&bitset, &other);
             let collected = xor.iter().collect::<Vec<Index>>();
             assert_eq!(collected, vec![1, 2, 50001]);
         }

@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use atom::AtomSetOnce;
 
+use typenum::U3;
+
 use util::*;
 use BitSetLike;
 
@@ -150,28 +152,31 @@ impl AtomicBitSet {
     }
 }
 
-impl BitSetLike for AtomicBitSet {
+impl BitSetLike<U3> for AtomicBitSet {
+
     #[inline]
-    fn layer3(&self) -> usize {
+    fn get_from_layer(&self, layer: usize, idx: usize) -> usize {
+        match layer {
+            0 => {
+                let (o1, o0) = (idx >> BITS, idx & ((1 << BITS) - 1));
+                self.layer1[o1]
+                    .atom
+                    .get()
+                    .map(|l0| l0[o0].load(Ordering::Relaxed))
+                    .unwrap_or(0)
+            },
+            1 => self.layer1[idx].mask.load(Ordering::Relaxed),
+            2 => self.layer2[idx].load(Ordering::Relaxed),
+            3 => self.top_layer(),
+            _ => panic!("Unsupported layer: {}", layer),
+        }
+    }
+
+    #[inline]
+    fn top_layer(&self) -> usize {
         self.layer3.load(Ordering::Relaxed)
     }
-    #[inline]
-    fn layer2(&self, i: usize) -> usize {
-        self.layer2[i].load(Ordering::Relaxed)
-    }
-    #[inline]
-    fn layer1(&self, i: usize) -> usize {
-        self.layer1[i].mask.load(Ordering::Relaxed)
-    }
-    #[inline]
-    fn layer0(&self, i: usize) -> usize {
-        let (o1, o0) = (i >> BITS, i & ((1 << BITS) - 1));
-        self.layer1[o1]
-            .atom
-            .get()
-            .map(|l0| l0[o0].load(Ordering::Relaxed))
-            .unwrap_or(0)
-    }
+
     #[inline]
     fn contains(&self, i: Index) -> bool {
         self.contains(i)
@@ -360,7 +365,7 @@ mod atomic_set_test {
 
         assert_eq!((&odd).iter().count(), 50_000);
         assert_eq!((&even).iter().count(), 50_000);
-        assert_eq!(BitSetAnd(&odd, &even).iter().count(), 0);
+        assert_eq!(BitSetAnd::new(&odd, &even).iter().count(), 0);
     }
 
     #[test]
