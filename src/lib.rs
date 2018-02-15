@@ -415,10 +415,10 @@ mod tests {
         use rand::{Rng, weak_rng};
         let mut set = BitSet::new();
         let mut rng = weak_rng();
-        let max_added = 1_048_576 / 10;
+        let limit = 1_048_576;
         let mut added = 0;
-        for _ in 0..max_added {
-            let index = rng.gen_range(0, max_added);
+        for _ in 0..(limit / 10) {
+            let index = rng.gen_range(0, limit);
             if !set.add(index) {
                 added += 1;
             }
@@ -485,9 +485,9 @@ mod test_parallel {
         let mut set = BitSet::new();
         let mut check_set = HashSet::new();
         let mut rng = weak_rng();
-        let max_added = 1_048_576 / 10;
-        for _ in 0..max_added {
-            let index = rng.gen_range(0, max_added);
+        let limit = 1_048_576;
+        for _ in 0..(limit / 10) {
+            let index = rng.gen_range(0, limit);
             set.add(index);
             check_set.insert(index);
         }

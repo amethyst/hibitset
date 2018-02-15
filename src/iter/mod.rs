@@ -39,27 +39,21 @@ impl<T: BitSetLike> BitIter<T> {
 }
 
 impl<'a> BitIter<&'a mut BitSet> {
-    /// Clears the rest of the bitset that hasn't been iterated yet.
-    pub fn clear(&mut self) {
-        use self::State::*;
-        'find: loop {
-            for level in 1..LAYERS {
-                match self.handle_level(level) {
-                    Value(_) => unreachable!("Lowest level is not iterated directly."),
-                    Continue => {
-                        let lower = level - 1;
-                        let idx = (self.prefix[lower] >> BITS) as usize;
-                        *self.set.layer_mut(lower, idx) = 0;
-                        continue 'find;
-                    }
-                    Empty => {},
-                }
+    /// Clears the rest of the bitset starting from the next inner layer.
+    pub(crate) fn clear(&mut self) {
+        use self::State::Continue;
+        while let Some(level) = (1..LAYERS).find(|&level| self.handle_level(level) == Continue) {
+            let lower = level - 1;
+            let idx = (self.prefix[lower] >> BITS) as usize;
+            *self.set.layer_mut(lower, idx) = 0;
+            if level == LAYERS - 1 {
+                self.set.layer3 &= !((2 << idx) - 1);
             }
-            break;
         }
     }
 }
 
+#[derive(PartialEq)]
 pub(crate) enum State {
     Empty,
     Continue,
@@ -108,6 +102,33 @@ impl<T: BitSetLike> BitIter<T> {
                 self.prefix[level - 1] = idx << BITS;
                 Continue
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ::{BitSet, BitSetLike};
+    
+    #[test]
+    fn iterator_clear_empties() {
+        use rand::{Rng, weak_rng};
+        let mut set = BitSet::new();
+        let mut rng = weak_rng();
+        let limit = 1_048_576;
+        for _ in 0..(limit / 10) {
+            set.add(rng.gen_range(0, limit));
+        }
+        (&mut set).iter().clear();
+        assert_eq!(0, set.layer3);
+        for &i in &set.layer2 {
+            assert_eq!(0, i);
+        }
+        for &i in &set.layer1 {
+            assert_eq!(0, i);
+        }
+        for &i in &set.layer0 {
+            assert_eq!(0, i);
         }
     }
 }

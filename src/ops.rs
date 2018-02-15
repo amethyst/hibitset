@@ -10,23 +10,12 @@ impl<'a, B> BitOrAssign<&'a B> for BitSet
     where B: BitSetLike
 {
     fn bitor_assign(&mut self, lhs: &B) {
-        use iter::State::*;
+        use iter::State::Continue;
         let mut iter = lhs.iter();
-        'find: loop {
-            for level in 1..LAYERS {
-                match iter.handle_level(level) {
-                    Value(_) => unreachable!("Lowest level is not iterated directly."),
-                    Continue => {
-                        let lower = level - 1;
-                        let idx = iter.prefix[lower] as usize >> BITS;
-
-                        *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
-                        continue 'find;
-                    }
-                    Empty => {},
-                }
-            }
-            break;
+        while let Some(level) = (1..LAYERS).find(|&level| iter.handle_level(level) == Continue) {
+            let lower = level - 1;
+            let idx = iter.prefix[lower] as usize >> BITS;
+            *self.layer_mut(lower, idx) |= lhs.get_from_layer(lower, idx);
         }
         self.layer3 |= lhs.layer3();
     }
@@ -39,31 +28,20 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
         use iter::State::*;
         let mut iter = lhs.iter();
         iter.masks[LAYERS - 1] &= self.layer3();
-        'find: loop {
-            for level in 1..LAYERS {
-                match iter.handle_level(level) {
-                    Value(_) => unreachable!("Lowest level is not iterated directly."),
-                    Continue => {
-                        let lower = level - 1;
-                        let idx = iter.prefix[lower] as usize >> BITS;
-                        let our_layer = self.get_from_layer(lower, idx);
-                        let their_layer = lhs.get_from_layer(lower, idx);
+        while let Some(level) = (1..LAYERS).find(|&level| iter.handle_level(level) == Continue) {
+            let lower = level - 1;
+            let idx = iter.prefix[lower] as usize >> BITS;
+            let our_layer = self.get_from_layer(lower, idx);
+            let their_layer = lhs.get_from_layer(lower, idx);
 
-                        iter.masks[lower] &= our_layer;
+            iter.masks[lower] &= our_layer;
 
-                        let mut masks = [0; LAYERS];
-                        masks[lower] = our_layer & !their_layer;
-                        BitIter::new(&mut *self, masks, iter.prefix).clear();
+            let mut masks = [0; LAYERS];
+            masks[lower] = our_layer & !their_layer;
+            BitIter::new(&mut *self, masks, iter.prefix).clear();
 
-                        *self.layer_mut(lower, idx) &= their_layer;
-                        continue 'find;
-                    }
-                    Empty => {},
-                }
-            }
-            break;
+            *self.layer_mut(lower, idx) &= their_layer;
         }
-
         let mut masks = [0; LAYERS];
         masks[LAYERS - 1] =  self.layer3() & !lhs.layer3();
         BitIter::new(&mut *self, masks, [0; LAYERS - 1]).clear();
@@ -78,41 +56,31 @@ impl<'a, B> BitXorAssign<&'a B> for BitSet
     fn bitxor_assign(&mut self, lhs: &B) {
         use iter::State::*;
         let mut iter = lhs.iter();
-        'find: loop {
-            for level in 1..LAYERS {
-                match iter.handle_level(level) {
-                    Value(_) => unreachable!("Lowest level is not iterated directly."),
-                    Continue => {
-                        let lower = level - 1;
-                        let idx = iter.prefix[lower] as usize >> BITS;
+        while let Some(level) = (1..LAYERS).find(|&level| iter.handle_level(level) == Continue) {
+            let lower = level - 1;
+            let idx = iter.prefix[lower] as usize >> BITS;
 
-                        if lower == 0 {
-                            *self.layer_mut(lower, idx) ^= lhs.get_from_layer(lower, idx);
+            if lower == 0 {
+                *self.layer_mut(lower, idx) ^= lhs.get_from_layer(lower, idx);
 
-                            let mut change_bit = |level| {
-                                let lower = level - 1;
-                                let h = iter.prefix.get(level).cloned().unwrap_or(0) as usize;
-                                let l = iter.prefix[lower] as usize >> BITS;
-                                let mask = 1 << (l & !h);
+                let mut change_bit = |level| {
+                    let lower = level - 1;
+                    let h = iter.prefix.get(level).cloned().unwrap_or(0) as usize;
+                    let l = iter.prefix[lower] as usize >> BITS;
+                    let mask = 1 << (l & !h);
 
-                                if self.get_from_layer(lower, l) == 0 {
-                                    *self.layer_mut(level, h >> BITS) &= !mask;
-                                } else {
-                                    *self.layer_mut(level, h >> BITS) |= mask;
-                                }
-                            };
-
-                            change_bit(level);
-                            if iter.masks[level] == 0 {
-                                (2..LAYERS).for_each(change_bit);
-                            }
-                        }
-                        continue 'find;
+                    if self.get_from_layer(lower, l) == 0 {
+                        *self.layer_mut(level, h >> BITS) &= !mask;
+                    } else {
+                        *self.layer_mut(level, h >> BITS) |= mask;
                     }
-                    Empty => {},
+                };
+
+                change_bit(level);
+                if iter.masks[level] == 0 {
+                    (2..LAYERS).for_each(change_bit);
                 }
             }
-            break;
         }
     }
 }
@@ -396,6 +364,44 @@ mod tests {
     }
 
     #[test]
+    fn or_assign_random() {
+        use rand::{Rng, weak_rng};
+        use std::collections::HashSet;
+        let limit = 1_048_576;
+        let mut rng = weak_rng();
+
+        let mut set1 = BitSet::new();
+        let mut check_set1 = HashSet::new();
+        for _ in 0..(limit / 100) {
+            let index = rng.gen_range(0, limit);
+            set1.add(index);
+            check_set1.insert(index);
+        }
+        
+        let mut set2 = BitSet::new();
+        let mut check_set2 = HashSet::new();
+        for _ in 0..(limit / 100) {
+            let index = rng.gen_range(0, limit);
+            set2.add(index);
+            check_set2.insert(index);
+        }
+
+        let hs1 = (&set1).iter().collect::<HashSet<_>>();
+        let hs2 = (&set2).iter().collect::<HashSet<_>>();
+        let mut hs = (&hs1 | &hs2).iter().cloned().collect::<HashSet<_>>();
+
+        set1 |= &set2;
+
+        for _ in 0..(limit / 1000) {
+            let index = rng.gen_range(0, limit);
+            set1.add(index);
+            hs.insert(index);
+        }
+
+        assert_eq!(hs, set1.iter().collect());
+    }
+
+    #[test]
     fn and_assign() {
         use std::mem::size_of;
         use std::collections::HashSet;
@@ -457,6 +463,44 @@ mod tests {
     }
 
     #[test]
+    fn and_assign_random() {
+        use rand::{Rng, weak_rng};
+        use std::collections::HashSet;
+        let limit = 1_048_576;
+        let mut rng = weak_rng();
+
+        let mut set1 = BitSet::new();
+        let mut check_set1 = HashSet::new();
+        for _ in 0..(limit / 100) {
+            let index = rng.gen_range(0, limit);
+            set1.add(index);
+            check_set1.insert(index);
+        }
+        
+        let mut set2 = BitSet::new();
+        let mut check_set2 = HashSet::new();
+        for _ in 0..(limit / 100) {
+            let index = rng.gen_range(0, limit);
+            set2.add(index);
+            check_set2.insert(index);
+        }
+
+        let hs1 = (&set1).iter().collect::<HashSet<_>>();
+        let hs2 = (&set2).iter().collect::<HashSet<_>>();
+        let mut hs = (&hs1 & &hs2).iter().cloned().collect::<HashSet<_>>();
+
+        set1 &= &set2;
+
+        for _ in 0..(limit / 1000) {
+            let index = rng.gen_range(0, limit);
+            set1.add(index);
+            hs.insert(index);
+        }
+
+        assert_eq!(hs, set1.iter().collect());
+    }
+
+    #[test]
     fn xor_assign() {
         use std::mem::size_of;
         use std::collections::HashSet;
@@ -497,6 +541,44 @@ mod tests {
         c1 ^= &c2;
 
         assert_eq!(c1.iter().collect::<Vec<_>>(), [0, a, b]);
+    }
+
+    #[test]
+    fn xor_assign_random() {
+        use rand::{Rng, weak_rng};
+        use std::collections::HashSet;
+        let limit = 1_048_576;
+        let mut rng = weak_rng();
+
+        let mut set1 = BitSet::new();
+        let mut check_set1 = HashSet::new();
+        for _ in 0..(limit / 100) {
+            let index = rng.gen_range(0, limit);
+            set1.add(index);
+            check_set1.insert(index);
+        }
+        
+        let mut set2 = BitSet::new();
+        let mut check_set2 = HashSet::new();
+        for _ in 0..(limit / 100) {
+            let index = rng.gen_range(0, limit);
+            set2.add(index);
+            check_set2.insert(index);
+        }
+
+        let hs1 = (&set1).iter().collect::<HashSet<_>>();
+        let hs2 = (&set2).iter().collect::<HashSet<_>>();
+        let mut hs = (&hs1 ^ &hs2).iter().cloned().collect::<HashSet<_>>();
+
+        set1 ^= &set2;
+
+        for _ in 0..(limit / 1000) {
+            let index = rng.gen_range(0, limit);
+            set1.add(index);
+            hs.insert(index);
+        }
+
+        assert_eq!(hs, set1.iter().collect());
     }
 
     #[test]
