@@ -74,7 +74,7 @@ impl<'a, N> BitIter<&'a mut BitSet<N>, N>
             let idx = (self.prefix[lower] >> BITS) as usize;
             *self.set.layer_mut(lower, idx) = 0;
             if level == self.masks.len() - 1 {
-                *self.set.layer_mut(self.masks.len(), 0) &= !((2 << idx) - 1);
+                *self.set.layer_mut(level, 0) &= !((2 << idx) - 1);
             }
         }
     }
@@ -143,14 +143,23 @@ mod tests {
     
     #[test]
     fn iterator_clear_empties() {
+        use std::mem::size_of;
         use rand::{Rng, weak_rng};
+        use typenum::Unsigned;
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
+        
+        let step = 10;
+        let tests = max_size / step;
+
         let mut set = BitSet::<::DefaultLayers>::new();
         let mut rng = weak_rng();
-        let limit = 1_048_576;
-        for _ in 0..(limit / 10) {
-            set.add(rng.gen_range(0, limit));
+        for _ in 0..tests {
+            set.add(rng.gen_range(0, max_size));
         }
         (&mut set).iter().clear();
+
         assert_eq!(0, set.top_layer());
         for i in set.layers.iter() {
             for &i in i {
