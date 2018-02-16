@@ -112,6 +112,25 @@ impl BitSet {
         false
     }
 
+    fn layer_mut(&mut self, level: usize, idx: usize) -> &mut usize {
+        match level {
+            0 => {
+                Self::fill_up(&mut self.layer0, idx);
+                &mut self.layer0[idx]
+            }
+            1 => {
+                Self::fill_up(&mut self.layer1, idx);
+                &mut self.layer1[idx]
+            }
+            2 => {
+                Self::fill_up(&mut self.layer2, idx);
+                &mut self.layer2[idx]
+            }
+            3 => &mut self.layer3,
+            _ => panic!("Invalid layer: {}", level),
+        }
+    }
+
     /// Removes `id` from the set, returns `true` if the value
     /// was removed, and `false` if the value was not set
     /// to begin with.
@@ -218,7 +237,7 @@ pub trait BitSetLike {
     {
         let layer3 = self.layer3();
 
-        BitIter::new(self, [0, 0, 0, layer3], [0; 3])
+        BitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
     }
 
     /// Create a parallel iterator that will scan over the keyspace
@@ -256,6 +275,35 @@ impl<'a, T> BitSetLike for &'a T
     #[inline]
     fn contains(&self, i: Index) -> bool {
         (*self).contains(i)
+    }
+}
+
+impl<'a, T> BitSetLike for &'a mut T
+    where T: BitSetLike
+{
+    #[inline]
+    fn layer3(&self) -> usize {
+        (**self).layer3()
+    }
+
+    #[inline]
+    fn layer2(&self, i: usize) -> usize {
+        (**self).layer2(i)
+    }
+
+    #[inline]
+    fn layer1(&self, i: usize) -> usize {
+        (**self).layer1(i)
+    }
+
+    #[inline]
+    fn layer0(&self, i: usize) -> usize {
+        (**self).layer0(i)
+    }
+
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        (**self).contains(i)
     }
 }
 
@@ -367,10 +415,10 @@ mod tests {
         use rand::{Rng, weak_rng};
         let mut set = BitSet::new();
         let mut rng = weak_rng();
-        let max_added = 1_048_576 / 10;
+        let limit = 1_048_576;
         let mut added = 0;
-        for _ in 0..max_added {
-            let index = rng.gen_range(0, max_added);
+        for _ in 0..(limit / 10) {
+            let index = rng.gen_range(0, limit);
             if !set.add(index) {
                 added += 1;
             }
@@ -437,9 +485,9 @@ mod test_parallel {
         let mut set = BitSet::new();
         let mut check_set = HashSet::new();
         let mut rng = weak_rng();
-        let max_added = 1_048_576 / 10;
-        for _ in 0..max_added {
-            let index = rng.gen_range(0, max_added);
+        let limit = 1_048_576;
+        for _ in 0..(limit / 10) {
+            let index = rng.gen_range(0, limit);
             set.add(index);
             check_set.insert(index);
         }

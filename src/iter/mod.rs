@@ -1,5 +1,5 @@
 use util::*;
-use BitSetLike;
+use {BitSet, BitSetLike};
 
 #[cfg(feature="parallel")]
 pub use self::parallel::{BitParIter, BitProducer};
@@ -12,9 +12,9 @@ mod parallel;
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
 pub struct BitIter<T> {
-    set: T,
-    masks: [usize; 4],
-    prefix: [u32; 3],
+    pub(crate) set: T,
+    pub(crate) masks: [usize; LAYERS],
+    pub(crate) prefix: [u32; LAYERS - 1],
 }
 
 impl<T> BitIter<T> {
@@ -22,7 +22,7 @@ impl<T> BitIter<T> {
     /// but just [`.iter()`] on a bit set.
     ///
     /// [`.iter()`]: ../trait.BitSetLike.html#method.iter
-    pub fn new(set: T, masks: [usize; 4], prefix: [u32; 3]) -> Self {
+    pub fn new(set: T, masks: [usize; LAYERS], prefix: [u32; LAYERS - 1]) -> Self {
         BitIter {
             set: set,
             masks: masks,
@@ -38,7 +38,23 @@ impl<T: BitSetLike> BitIter<T> {
     }
 }
 
-enum State {
+impl<'a> BitIter<&'a mut BitSet> {
+    /// Clears the rest of the bitset starting from the next inner layer.
+    pub(crate) fn clear(&mut self) {
+        use self::State::Continue;
+        while let Some(level) = (1..LAYERS).find(|&level| self.handle_level(level) == Continue) {
+            let lower = level - 1;
+            let idx = (self.prefix[lower] >> BITS) as usize;
+            *self.set.layer_mut(lower, idx) = 0;
+            if level == LAYERS - 1 {
+                self.set.layer3 &= !((2 << idx) - 1);
+            }
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub(crate) enum State {
     Empty,
     Continue,
     Value(Index)
@@ -66,7 +82,7 @@ impl<T> Iterator for BitIter<T>
 }
 
 impl<T: BitSetLike> BitIter<T> {
-    fn handle_level(&mut self, level: usize) -> State {
+    pub(crate) fn handle_level(&mut self, level: usize) -> State {
         use self::State::*;
         if self.masks[level] == 0 {
             Empty
@@ -86,6 +102,33 @@ impl<T: BitSetLike> BitIter<T> {
                 self.prefix[level - 1] = idx << BITS;
                 Continue
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ::{BitSet, BitSetLike};
+    
+    #[test]
+    fn iterator_clear_empties() {
+        use rand::{Rng, weak_rng};
+        let mut set = BitSet::new();
+        let mut rng = weak_rng();
+        let limit = 1_048_576;
+        for _ in 0..(limit / 10) {
+            set.add(rng.gen_range(0, limit));
+        }
+        (&mut set).iter().clear();
+        assert_eq!(0, set.layer3);
+        for &i in &set.layer2 {
+            assert_eq!(0, i);
+        }
+        for &i in &set.layer1 {
+            assert_eq!(0, i);
+        }
+        for &i in &set.layer0 {
+            assert_eq!(0, i);
         }
     }
 }

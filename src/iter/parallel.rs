@@ -119,7 +119,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
                 average_ones(self.0.masks[level])
                     .and_then(|average_bit| {
                         let mask = (1 << average_bit) - 1;
-                        let mut other = BitProducer(BitIter::new(self.0.set, [0; 4], [0; 3]), splits);
+                        let mut other = BitProducer(BitIter::new(self.0.set, [0; LAYERS], [0; LAYERS - 1]), splits);
                         // The `other` is the more significant half of the mask
                         other.0.masks[level] = self.0.masks[level] & !mask;
                         other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
