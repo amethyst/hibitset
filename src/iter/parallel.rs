@@ -1,5 +1,5 @@
 use rayon::iter::ParallelIterator;
-use rayon::iter::internal::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
+use rayon::iter::plumbing::{UnindexedProducer, UnindexedConsumer, Folder, bridge_unindexed};
 
 use iter::{BITS, LAYERS, BitSetLike, BitIter, Index};
 use util::average_ones;
@@ -160,7 +160,7 @@ impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
 
 #[cfg(test)]
 mod test_bit_producer {
-    use rayon::iter::internal::UnindexedProducer;
+    use rayon::iter::plumbing::UnindexedProducer;
 
     use super::BitProducer;
     use iter::BitSetLike;
