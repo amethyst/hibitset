@@ -1,3 +1,6 @@
+use typenum::Unsigned;
+
+use std::mem::size_of;
 
 /// Type used for indexing.
 pub type Index = u32;
@@ -16,6 +19,23 @@ pub const SHIFT1: usize = SHIFT0 + BITS;
 pub const SHIFT2: usize = SHIFT1 + BITS;
 /// Top layer shift.
 pub const SHIFT3: usize = SHIFT2 + BITS;
+
+pub trait BitSetValues {
+    fn bits_in_layer() -> usize;
+    fn bitset_max_size() -> usize;
+}
+
+impl<U: Unsigned> BitSetValues for U {
+    fn bits_in_layer() -> usize {
+        let usize_bits = 8 * size_of::<usize>();
+        (usize_bits as f32).log2() as usize
+    }
+
+    fn bitset_max_size() -> usize {
+        let limit = Self::bits_in_layer() * (Self::to_usize() + 1);
+        2 << (limit - 1)
+    }
+}
 
 pub trait Row: Sized + Copy {
     /// Location of the bit in the row.

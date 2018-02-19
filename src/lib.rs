@@ -20,7 +20,8 @@ use generic_array::{ArrayLength, GenericArray};
 mod atomic;
 mod iter;
 mod ops;
-mod util;
+#[allow(missing_docs)]
+pub mod util;
 
 pub use atomic::AtomicBitSet;
 pub use iter::{BitIter, BitIterableNum};
@@ -62,8 +63,7 @@ impl<N: ArrayLength<Vec<usize>>> BitSet<N> {
 
     #[inline]
     fn valid_range(i: Index) {
-        let limit = BITS * (N::to_usize() + 1);
-        let max = 2 << (limit - 1);
+        let max = N::bitset_max_size();
         if (max as u32) < i {
             panic!("Expected index to be less then {}, found {}", max, i);
         }

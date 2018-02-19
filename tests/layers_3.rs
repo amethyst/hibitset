@@ -5,20 +5,15 @@ extern crate rand;
 extern crate rayon;
 
 use hibitset::{BitSet, BitSetAnd, BitSetNot, BitSetLike};
-
-use typenum::Unsigned;
-
-use std::mem::size_of;
+use hibitset::util::BitSetValues;
 
 type Layers = typenum::U3;
 
 #[test]
 fn insert() {
-    let bits = (size_of::<usize>() as f32).log2() as usize;
-    let limit = bits * (Layers::to_usize() + 1);
-    let max_size = 2 << (limit - 1);
+    let max_size = Layers::bitset_max_size() as u32;
 
-    let step = 1000;
+    let step = 10000;
     let tests = max_size / step;
 
     let mut c = BitSet::<Layers>::new();
@@ -36,11 +31,9 @@ fn insert() {
 
 #[test]
 fn insert_large() {
-    let bits = (size_of::<usize>() as f32).log2() as usize;
-    let limit = bits * (Layers::to_usize() + 1);
-    let max_size = 2 << (limit - 1);
+    let max_size = Layers::bitset_max_size() as u32;
 
-    let step = 10;
+    let step = 100;
     let tests = max_size / step;
 
     let mut c = BitSet::<Layers>::new();
@@ -57,11 +50,9 @@ fn insert_large() {
 }
 #[test]
 fn remove() {
-    let bits = (size_of::<usize>() as f32).log2() as usize;
-    let limit = bits * (Layers::to_usize() + 1);
-    let max_size = 2 << (limit - 1);
+    let max_size = Layers::bitset_max_size() as u32;
 
-    let step = 1000;
+    let step = 10000;
     let tests = max_size / step;
 
     let mut c = BitSet::<Layers>::new();
@@ -162,20 +153,15 @@ fn not() {
 #[cfg(feature="parallel")]
 mod parallel {
     use super::{BitSet, BitSetAnd, BitSetLike, Layers};
+    use hibitset::util::BitSetValues;
     
     use rayon::iter::ParallelIterator;
 
-    use typenum::Unsigned;
-
     #[test]
     fn par_iter_one() {
-        use std::mem::size_of;
-    
-        let bits = (size_of::<usize>() as f32).log2() as usize;
-        let limit = bits * (Layers::to_usize() + 1);
-        let max_size = 2 << (limit - 1);
+        let max_size = Layers::bitset_max_size() as u32;
 
-        let step = 5000;
+        let step = 50000;
         let tests = max_size / step;
         for n in 0..tests {
             let n = n * step;
@@ -193,16 +179,13 @@ mod parallel {
         use rand::{Rng, weak_rng};
         use std::collections::HashSet;
         use std::sync::{Arc, Mutex};
-        use std::mem::size_of;
-    
-        let bits = (size_of::<usize>() as f32).log2() as usize;
-        let limit = bits * (Layers::to_usize() + 1);
-        let max_size = 2 << (limit - 1);
+
+        let max_size = Layers::bitset_max_size() as u32;
 
         let mut set = BitSet::<Layers>::new();
         let mut check_set = HashSet::new();
         let mut rng = weak_rng();
-        let max_added = max_size / 10;
+        let max_added = max_size / 100;
         for _ in 0..max_added {
             let index = rng.gen_range(0, max_added);
             set.add(index);
