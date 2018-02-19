@@ -482,10 +482,15 @@ mod tests {
     #[test]
     fn or_assign() {
         use std::mem::size_of;
+        use typenum::Unsigned;
         use std::collections::HashSet;
+        
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
 
         let usize_bits = size_of::<usize>() as u32 * 8;
-        let n = 10_000;
+        let n = max_size / (13 * usize_bits);
         let f1 = &|n| 7 * usize_bits * n;
         let f2 = &|n| 13 * usize_bits * n;
 
@@ -504,23 +509,29 @@ mod tests {
 
     #[test]
     fn or_assign_random() {
+        use std::mem::size_of;
+        use typenum::Unsigned;
         use rand::{Rng, weak_rng};
         use std::collections::HashSet;
-        let limit = 1_048_576;
+        
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
+
         let mut rng = weak_rng();
 
         let mut set1 = BitSet::<::DefaultLayers>::new();
         let mut check_set1 = HashSet::new();
-        for _ in 0..(limit / 100) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 100) {
+            let index = rng.gen_range(0, max_size);
             set1.add(index);
             check_set1.insert(index);
         }
         
         let mut set2 = BitSet::<::DefaultLayers>::new();
         let mut check_set2 = HashSet::new();
-        for _ in 0..(limit / 100) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 100) {
+            let index = rng.gen_range(0, max_size);
             set2.add(index);
             check_set2.insert(index);
         }
@@ -531,8 +542,8 @@ mod tests {
 
         set1 |= &set2;
 
-        for _ in 0..(limit / 1000) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 1000) {
+            let index = rng.gen_range(0, max_size);
             set1.add(index);
             hs.insert(index);
         }
@@ -543,10 +554,15 @@ mod tests {
     #[test]
     fn and_assign() {
         use std::mem::size_of;
+        use typenum::Unsigned;
         use std::collections::HashSet;
+        
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
 
         let usize_bits = size_of::<usize>() as u32 * 8;
-        let n = 10_000;
+        let n = max_size / (13 * usize_bits);
         let f1 = &|n| 7 * usize_bits * n;
         let f2 = &|n| 13 * usize_bits * n;
 
@@ -603,23 +619,28 @@ mod tests {
 
     #[test]
     fn and_assign_random() {
+        use std::mem::size_of;
+        use typenum::Unsigned;
         use rand::{Rng, weak_rng};
         use std::collections::HashSet;
-        let limit = 1_048_576;
+        
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
         let mut rng = weak_rng();
 
         let mut set1 = BitSet::<::DefaultLayers>::new();
         let mut check_set1 = HashSet::new();
-        for _ in 0..(limit / 100) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 100) {
+            let index = rng.gen_range(0, max_size);
             set1.add(index);
             check_set1.insert(index);
         }
         
         let mut set2 = BitSet::<::DefaultLayers>::new();
         let mut check_set2 = HashSet::new();
-        for _ in 0..(limit / 100) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 100) {
+            let index = rng.gen_range(0, max_size);
             set2.add(index);
             check_set2.insert(index);
         }
@@ -630,8 +651,8 @@ mod tests {
 
         set1 &= &set2;
 
-        for _ in 0..(limit / 1000) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 1000) {
+            let index = rng.gen_range(0, max_size);
             set1.add(index);
             hs.insert(index);
         }
@@ -642,10 +663,15 @@ mod tests {
     #[test]
     fn xor_assign() {
         use std::mem::size_of;
+        use typenum::Unsigned;
         use std::collections::HashSet;
 
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
+
         let usize_bits = size_of::<usize>() as u32 * 8;
-        let n = 10_000;
+        let n = max_size / (13 * usize_bits);
         let f1 = &|n| 7 * usize_bits * n;
         let f2 = &|n| 13 * usize_bits * n;
 
@@ -684,23 +710,28 @@ mod tests {
 
     #[test]
     fn xor_assign_random() {
+        use std::mem::size_of;
+        use typenum::Unsigned;
         use rand::{Rng, weak_rng};
         use std::collections::HashSet;
-        let limit = 1_048_576;
+        
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
         let mut rng = weak_rng();
 
         let mut set1 = BitSet::<::DefaultLayers>::new();
         let mut check_set1 = HashSet::new();
-        for _ in 0..(limit / 100) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 100) {
+            let index = rng.gen_range(0, max_size);
             set1.add(index);
             check_set1.insert(index);
         }
         
         let mut set2 = BitSet::<::DefaultLayers>::new();
         let mut check_set2 = HashSet::new();
-        for _ in 0..(limit / 100) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 100) {
+            let index = rng.gen_range(0, max_size);
             set2.add(index);
             check_set2.insert(index);
         }
@@ -711,8 +742,8 @@ mod tests {
 
         set1 ^= &set2;
 
-        for _ in 0..(limit / 1000) {
-            let index = rng.gen_range(0, limit);
+        for _ in 0..(max_size / 1000) {
+            let index = rng.gen_range(0, max_size);
             set1.add(index);
             hs.insert(index);
         }
