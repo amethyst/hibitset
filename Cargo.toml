@@ -1,6 +1,6 @@
 [package]
 name = "hibitset"
-version = "0.4.1"
+version = "0.5.0"
 description = "Hierarchical bit set structure"
 documentation = "https://slide-rs.github.io/hibitset/"
 repository = "https://github.com/slide-rs/hibitset"
