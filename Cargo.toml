@@ -2,9 +2,10 @@
 name = "hibitset"
 version = "0.5.0"
 description = "Hierarchical bit set structure"
-documentation = "https://slide-rs.github.io/hibitset/"
+documentation = "https://docs.rs/hibitset"
 repository = "https://github.com/slide-rs/hibitset"
 keywords = ["bitset", "container", "data-structures", "hierarchical"]
+categories = ["data-structures"]
 license = "Apache-2.0"
 authors = ["csheratt"]
 
