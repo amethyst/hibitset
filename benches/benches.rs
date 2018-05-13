@@ -5,18 +5,18 @@ extern crate test;
 
 mod bitset {
     use test;
-    use hibitset::BitSet;
+    use hibitset::{BitSet, DefaultLayers};
 
     #[bench]
     fn add(b: &mut test::Bencher) {
-        let mut bitset = BitSet::with_capacity(1_000_000);
+        let mut bitset = BitSet::<DefaultLayers>::with_capacity(1_000_000);
         let mut range = (0..1_000_000).cycle();
         b.iter(|| range.next().map(|i| bitset.add(i)))
     }
 
     #[bench]
     fn remove_set(b: &mut test::Bencher) {
-        let mut bitset = BitSet::with_capacity(1_000_000);
+        let mut bitset = BitSet::<DefaultLayers>::with_capacity(1_000_000);
         let mut range = (0..1_000_000).cycle();
         for i in 0..1_000_000 {
             bitset.add(i);
@@ -26,14 +26,14 @@ mod bitset {
 
     #[bench]
     fn remove_clear(b: &mut test::Bencher) {
-        let mut bitset = BitSet::with_capacity(1_000_000);
+        let mut bitset = BitSet::<DefaultLayers>::with_capacity(1_000_000);
         let mut range = (0..1_000_000).cycle();
         b.iter(|| range.next().map(|i| bitset.remove(i)))
     }
 
     #[bench]
     fn contains(b: &mut test::Bencher) {
-        let mut bitset = BitSet::with_capacity(1_000_000);
+        let mut bitset = BitSet::<DefaultLayers>::with_capacity(1_000_000);
         let mut range = (0..1_000_000).cycle();
         for i in 0..500_000 {
             // events are set, odds are to keep the branch

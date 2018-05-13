@@ -1,28 +1,49 @@
 use util::*;
 use {BitSet, BitSetLike};
 
+use typenum::{Add1, B1, Unsigned};
+use generic_array::{ArrayLength, GenericArray};
+
+use std::ops::Add;
+
 #[cfg(feature="parallel")]
 pub use self::parallel::{BitParIter, BitProducer};
 
 #[cfg(feature="parallel")]
 mod parallel;
 
+/// Trait to clean up signatures of bitset iteration.
+pub trait BitIterableNum: Add<B1> + ArrayLength<u32> + ArrayLength<Vec<usize>> {}
+
+impl<N> BitIterableNum for N
+where N: Unsigned +
+         Add<B1> +
+         ArrayLength<u32> +
+         ArrayLength<Vec<usize>>
+{}
+
 /// An `Iterator` over a [`BitSetLike`] structure.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
 #[derive(Debug)]
-pub struct BitIter<T> {
+pub struct BitIter<T: BitSetLike<N>, N>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
+{
     pub(crate) set: T,
-    pub(crate) masks: [usize; LAYERS],
-    pub(crate) prefix: [u32; LAYERS - 1],
+    pub(crate) masks: GenericArray<usize, Add1<N>>,
+    pub(crate) prefix: GenericArray<u32, N>,
 }
 
-impl<T> BitIter<T> {
+impl<T: BitSetLike<N>, N> BitIter<T, N>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
+{
     /// Creates a new `BitIter`. You usually don't call this function
     /// but just [`.iter()`] on a bit set.
     ///
     /// [`.iter()`]: ../trait.BitSetLike.html#method.iter
-    pub fn new(set: T, masks: [usize; LAYERS], prefix: [u32; LAYERS - 1]) -> Self {
+    pub fn new(set: T, masks: GenericArray<usize, Add1<N>>, prefix: GenericArray<u32, N>) -> Self {
         BitIter {
             set: set,
             masks: masks,
@@ -31,23 +52,29 @@ impl<T> BitIter<T> {
     }
 }
 
-impl<T: BitSetLike> BitIter<T> {
+impl<T: BitSetLike<N>, N> BitIter<T, N>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
+{
     /// Allows checking if set bit is contained in underlying bit set.
     pub fn contains(&self, i: Index) -> bool {
         self.set.contains(i)
     }
 }
 
-impl<'a> BitIter<&'a mut BitSet> {
+impl<'a, N> BitIter<&'a mut BitSet<N>, N>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
+{
     /// Clears the rest of the bitset starting from the next inner layer.
     pub(crate) fn clear(&mut self) {
         use self::State::Continue;
-        while let Some(level) = (1..LAYERS).find(|&level| self.handle_level(level) == Continue) {
+        while let Some(level) = (1..self.masks.len()).find(|&level| self.handle_level(level) == Continue) {
             let lower = level - 1;
             let idx = (self.prefix[lower] >> BITS) as usize;
             *self.set.layer_mut(lower, idx) = 0;
-            if level == LAYERS - 1 {
-                self.set.layer3 &= !((2 << idx) - 1);
+            if level == self.masks.len() - 1 {
+                *self.set.layer_mut(level, 0) &= !((2 << idx) - 1);
             }
         }
     }
@@ -60,15 +87,16 @@ pub(crate) enum State {
     Value(Index)
 }
 
-impl<T> Iterator for BitIter<T>
-    where T: BitSetLike
+impl<T: BitSetLike<N>, N> Iterator for BitIter<T, N>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
 {
     type Item = Index;
 
     fn next(&mut self) -> Option<Self::Item> {
         use self::State::*;
         'find: loop {
-            for level in 0..LAYERS {
+            for level in 0..(N::to_usize() + 1) {
                 match self.handle_level(level) {
                     Value(v) => return Some(v),
                     Continue => continue 'find,
@@ -81,7 +109,10 @@ impl<T> Iterator for BitIter<T>
     }
 }
 
-impl<T: BitSetLike> BitIter<T> {
+impl<T: BitSetLike<N>, N> BitIter<T, N>
+    where N: BitIterableNum,
+          Add1<N>: ArrayLength<usize>
+{
     pub(crate) fn handle_level(&mut self, level: usize) -> State {
         use self::State::*;
         if self.masks[level] == 0 {
@@ -112,23 +143,28 @@ mod tests {
     
     #[test]
     fn iterator_clear_empties() {
+        use std::mem::size_of;
         use rand::{Rng, weak_rng};
-        let mut set = BitSet::new();
+        use typenum::Unsigned;
+        let bits = (size_of::<usize>() as f32).log2() as usize;
+        let limit = bits * (::DefaultLayers::to_usize() + 1);
+        let max_size = 2 << (limit - 1);
+        
+        let step = 10;
+        let tests = max_size / step;
+
+        let mut set = BitSet::<::DefaultLayers>::new();
         let mut rng = weak_rng();
-        let limit = 1_048_576;
-        for _ in 0..(limit / 10) {
-            set.add(rng.gen_range(0, limit));
+        for _ in 0..tests {
+            set.add(rng.gen_range(0, max_size));
         }
         (&mut set).iter().clear();
-        assert_eq!(0, set.layer3);
-        for &i in &set.layer2 {
-            assert_eq!(0, i);
-        }
-        for &i in &set.layer1 {
-            assert_eq!(0, i);
-        }
-        for &i in &set.layer0 {
-            assert_eq!(0, i);
+
+        assert_eq!(0, set.top_layer());
+        for i in set.layers.iter() {
+            for &i in i {
+                assert_eq!(0, i);
+            }
         }
     }
 }
