@@ -114,6 +114,13 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
     fn contains(&self, i: Index) -> bool {
         self.0.contains(i) && self.1.contains(i)
     }
+    #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        let c = self.contains(i);
+        self.0.set(i, v);
+        self.1.set(i, v);
+        c
+    }
 }
 
 /// `BitSetOr` takes two [`BitSetLike`] items, and merges the masks
@@ -145,6 +152,13 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
     fn contains(&self, i: Index) -> bool {
         self.0.contains(i) || self.1.contains(i)
     }
+    #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        let c = self.contains(i);
+        self.0.set(i, v);
+        self.1.set(i, v);
+        c
+    }
 }
 
 /// `BitSetNot` takes a [`BitSetLike`] item, and produced an inverted virtual set.
@@ -174,6 +188,12 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     #[inline]
     fn contains(&self, i: Index) -> bool {
         !self.0.contains(i)
+    }
+    #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        let c = self.contains(i);
+        self.0.set(i, v);
+        c
     }
 }
 
@@ -209,6 +229,13 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
     #[inline]
     fn contains(&self, i: Index) -> bool {
         BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1))).contains(i)
+    }
+    #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        let c = self.contains(i);
+        self.0.set(i, v);
+        self.1.set(i, v);
+        c
     }
 
 }

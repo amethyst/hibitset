@@ -173,6 +173,14 @@ impl BitSetLike for AtomicBitSet {
             .unwrap_or(0)
     }
     #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        if v {
+            self.add(i)
+        } else {
+            !self.remove(i)
+        }
+    }
+    #[inline]
     fn contains(&self, i: Index) -> bool {
         self.contains(i)
     }

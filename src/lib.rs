@@ -4,7 +4,7 @@
 //! which allow very fast iteration
 //! on sparse data structures.
 
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 
 extern crate atom;
 #[cfg(feature="parallel")]
@@ -18,7 +18,7 @@ mod ops;
 mod util;
 
 pub use atomic::AtomicBitSet;
-pub use iter::BitIter;
+pub use iter::{BitIter, DrainBitIter};
 #[cfg(feature="parallel")]
 pub use iter::{BitParIter, BitProducer};
 pub use ops::{BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
@@ -212,6 +212,8 @@ pub trait BitSetLike {
         }
     }
 
+    fn set(&mut self, i: Index, value: bool) -> bool;
+
     /// Return a `usize` where each bit represents if any word in layer2
     /// has been set.
     fn layer3(&self) -> usize;
@@ -238,6 +240,15 @@ pub trait BitSetLike {
         let layer3 = self.layer3();
 
         BitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
+    }
+
+    /// Create a draining iterator that will scan over the keyspace and clears it while doing so
+    fn drain<'a>(&'a mut self) -> DrainBitIter<'a, Self>
+        where Self: Sized
+    {
+        let layer3 = self.layer3();
+
+        DrainBitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
     }
 
     /// Create a parallel iterator that will scan over the keyspace
@@ -276,6 +287,12 @@ impl<'a, T> BitSetLike for &'a T
     fn contains(&self, i: Index) -> bool {
         (*self).contains(i)
     }
+
+    #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        unimplemented!()
+        // (*self).set(i, v)
+    }
 }
 
 impl<'a, T> BitSetLike for &'a mut T
@@ -305,6 +322,11 @@ impl<'a, T> BitSetLike for &'a mut T
     fn contains(&self, i: Index) -> bool {
         (**self).contains(i)
     }
+
+    #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        (**self).set(i, v)
+    }
 }
 
 impl BitSetLike for BitSet {
@@ -331,6 +353,15 @@ impl BitSetLike for BitSet {
     #[inline]
     fn contains(&self, i: Index) -> bool {
         self.contains(i)
+    }
+    
+    #[inline]
+    fn set(&mut self, i: Index, v: bool) -> bool {
+        if v {
+            self.add(i)
+        } else {
+            !self.remove(i)
+        }
     }
 }
 
