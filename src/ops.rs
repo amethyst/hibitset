@@ -114,12 +114,18 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
     fn contains(&self, i: Index) -> bool {
         self.0.contains(i) && self.1.contains(i)
     }
+}
+
+impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetAnd<A, B> {
     #[inline]
-    fn set(&mut self, i: Index, v: bool) -> bool {
-        let c = self.contains(i);
-        self.0.set(i, v);
-        self.1.set(i, v);
-        c
+    fn remove(&mut self, i: Index) -> bool {
+        if self.contains(i) {
+            self.0.remove(i);
+            self.1.remove(i);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -152,12 +158,18 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
     fn contains(&self, i: Index) -> bool {
         self.0.contains(i) || self.1.contains(i)
     }
+}
+
+impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetOr<A, B> {
     #[inline]
-    fn set(&mut self, i: Index, v: bool) -> bool {
-        let c = self.contains(i);
-        self.0.set(i, v);
-        self.1.set(i, v);
-        c
+    fn remove(&mut self, i: Index) -> bool {
+        if self.contains(i) {
+            self.0.remove(i);
+            self.1.remove(i);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -189,11 +201,12 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     fn contains(&self, i: Index) -> bool {
         !self.0.contains(i)
     }
+}
+
+impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetAnd<A, B> {
     #[inline]
-    fn set(&mut self, i: Index, v: bool) -> bool {
-        let c = self.contains(i);
-        self.0.set(i, v);
-        c
+    fn remove(&mut self, i: Index) -> bool {
+        false
     }
 }
 
@@ -230,14 +243,19 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
     fn contains(&self, i: Index) -> bool {
         BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1))).contains(i)
     }
-    #[inline]
-    fn set(&mut self, i: Index, v: bool) -> bool {
-        let c = self.contains(i);
-        self.0.set(i, v);
-        self.1.set(i, v);
-        c
-    }
+}
 
+impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetXor<A, B> {
+    #[inline]
+    fn remove(&mut self, i: Index) -> bool {
+        if self.contains(i) {
+            self.0.remove(i);
+            self.1.remove(i);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 macro_rules! operator {

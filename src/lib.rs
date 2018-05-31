@@ -212,8 +212,6 @@ pub trait BitSetLike {
         }
     }
 
-    fn set(&mut self, i: Index, value: bool) -> bool;
-
     /// Return a `usize` where each bit represents if any word in layer2
     /// has been set.
     fn layer3(&self) -> usize;
@@ -242,6 +240,18 @@ pub trait BitSetLike {
         BitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
     }
 
+    /// Create a parallel iterator that will scan over the keyspace
+    #[cfg(feature="parallel")]
+    fn par_iter(self) -> BitParIter<Self>
+        where Self: Sized
+    {
+        BitParIter::new(self)
+    }
+}
+
+trait DrainableBitSet: BitSetLike {
+    fn remove(&mut self, i: Index) -> bool;
+
     /// Create a draining iterator that will scan over the keyspace and clears it while doing so
     fn drain<'a>(&'a mut self) -> DrainBitIter<'a, Self>
         where Self: Sized
@@ -249,14 +259,6 @@ pub trait BitSetLike {
         let layer3 = self.layer3();
 
         DrainBitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
-    }
-
-    /// Create a parallel iterator that will scan over the keyspace
-    #[cfg(feature="parallel")]
-    fn par_iter(self) -> BitParIter<Self>
-        where Self: Sized
-    {
-        BitParIter::new(self)
     }
 }
 
@@ -287,12 +289,6 @@ impl<'a, T> BitSetLike for &'a T
     fn contains(&self, i: Index) -> bool {
         (*self).contains(i)
     }
-
-    #[inline]
-    fn set(&mut self, i: Index, v: bool) -> bool {
-        unimplemented!()
-        // (*self).set(i, v)
-    }
 }
 
 impl<'a, T> BitSetLike for &'a mut T
@@ -322,10 +318,14 @@ impl<'a, T> BitSetLike for &'a mut T
     fn contains(&self, i: Index) -> bool {
         (**self).contains(i)
     }
+}
 
+impl<'a, T> DrainableBitSet for &'a mut T
+    where T: DrainableBitSet
+{   
     #[inline]
-    fn set(&mut self, i: Index, v: bool) -> bool {
-        (**self).set(i, v)
+    fn remove(&mut self, i: Index) -> bool {
+        (**self).remove(i)
     }
 }
 
@@ -354,14 +354,12 @@ impl BitSetLike for BitSet {
     fn contains(&self, i: Index) -> bool {
         self.contains(i)
     }
-    
+}
+
+impl DrainableBitSet for BitSet {
     #[inline]
-    fn set(&mut self, i: Index, v: bool) -> bool {
-        if v {
-            self.add(i)
-        } else {
-            !self.remove(i)
-        }
+    fn remove(&mut self, i: Index) -> bool {
+        self.remove(i)
     }
 }
 
