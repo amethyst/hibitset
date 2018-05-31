@@ -4,7 +4,7 @@
 //! which allow very fast iteration
 //! on sparse data structures.
 
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 
 extern crate atom;
 #[cfg(feature="parallel")]
@@ -249,10 +249,14 @@ pub trait BitSetLike {
     }
 }
 
-trait DrainableBitSet: BitSetLike {
+/// A extension to the [`BitSetLike`] trait which allows draining it.
+pub trait DrainableBitSet: BitSetLike {
+    /// Removes bit from the bit set.
+    /// 
+    /// Returns `true` if removal happened and `false` otherwise.
     fn remove(&mut self, i: Index) -> bool;
 
-    /// Create a draining iterator that will scan over the keyspace and clears it while doing so
+    /// Create a draining iterator that will scan over the keyspace and clears it while doing so.
     fn drain<'a>(&'a mut self) -> DrainBitIter<'a, Self>
         where Self: Sized
     {

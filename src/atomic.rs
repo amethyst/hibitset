@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use atom::AtomSetOnce;
 
 use util::*;
-use BitSetLike;
+use {BitSetLike, DrainableBitSet};
 
 /// This is similar to a [`BitSet`] but allows setting of value
 /// without unique ownership of the structure

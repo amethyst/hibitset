@@ -4,7 +4,7 @@ use std::iter::{FromIterator, IntoIterator};
 
 use util::*;
 
-use {AtomicBitSet, BitIter, BitSet, BitSetLike};
+use {AtomicBitSet, BitIter, BitSet, BitSetLike, DrainableBitSet};
 
 impl<'a, B> BitOrAssign<&'a B> for BitSet
     where B: BitSetLike
@@ -203,9 +203,9 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     }
 }
 
-impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetAnd<A, B> {
+impl<A: DrainableBitSet> DrainableBitSet for BitSetNot<A> {
     #[inline]
-    fn remove(&mut self, i: Index) -> bool {
+    fn remove(&mut self, _: Index) -> bool {
         false
     }
 }
