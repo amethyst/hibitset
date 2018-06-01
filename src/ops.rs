@@ -203,13 +203,6 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
     }
 }
 
-impl<A: DrainableBitSet> DrainableBitSet for BitSetNot<A> {
-    #[inline]
-    fn remove(&mut self, _: Index) -> bool {
-        false
-    }
-}
-
 /// `BitSetXor` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an merged of the
 /// two original sets.
@@ -242,19 +235,6 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
     #[inline]
     fn contains(&self, i: Index) -> bool {
         BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1))).contains(i)
-    }
-}
-
-impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetXor<A, B> {
-    #[inline]
-    fn remove(&mut self, i: Index) -> bool {
-        if self.contains(i) {
-            self.0.remove(i);
-            self.1.remove(i);
-            true
-        } else {
-            false
-        }
     }
 }
 

@@ -2,9 +2,9 @@ use util::*;
 use iter::BitIter;
 use DrainableBitSet;
 
-/// A draining `Iterator` over a [`DrainBitSet`] structure.
+/// A draining `Iterator` over a [`DrainableBitSet`] structure.
 ///
-/// [`DrainBitSet`]: ../trait.DrainableBitSet.html
+/// [`DrainableBitSet`]: ../trait.DrainableBitSet.html
 pub struct DrainBitIter<'a, T: 'a> {
     iter: BitIter<&'a mut T>,
 }
@@ -13,7 +13,7 @@ impl<'a, T: DrainableBitSet> DrainBitIter<'a, T> {
     /// Creates a new `DrainBitIter`. You usually don't call this function
     /// but just [`.drain()`] on a bit set.
     ///
-    /// [`.drain()`]: ../trait.DrainBitSet.html#method.drain
+    /// [`.drain()`]: ../trait.DrainableBitSet.html#method.drain
     pub fn new(set: &'a mut T, masks: [usize; LAYERS], prefix: [u32; LAYERS - 1]) -> Self {
         DrainBitIter {
             iter: BitIter::new(set, masks, prefix),
