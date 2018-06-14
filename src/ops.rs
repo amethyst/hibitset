@@ -4,7 +4,7 @@ use std::iter::{FromIterator, IntoIterator};
 
 use util::*;
 
-use {AtomicBitSet, BitIter, BitSet, BitSetLike};
+use {AtomicBitSet, BitIter, BitSet, BitSetLike, DrainableBitSet};
 
 impl<'a, B> BitOrAssign<&'a B> for BitSet
     where B: BitSetLike
@@ -116,6 +116,19 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
     }
 }
 
+impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetAnd<A, B> {
+    #[inline]
+    fn remove(&mut self, i: Index) -> bool {
+        if self.contains(i) {
+            self.0.remove(i);
+            self.1.remove(i);
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// `BitSetOr` takes two [`BitSetLike`] items, and merges the masks
 /// returning a new virtual set, which represents an merged of the
 /// two original sets.
@@ -144,6 +157,19 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
     #[inline]
     fn contains(&self, i: Index) -> bool {
         self.0.contains(i) || self.1.contains(i)
+    }
+}
+
+impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetOr<A, B> {
+    #[inline]
+    fn remove(&mut self, i: Index) -> bool {
+        if self.contains(i) {
+            self.0.remove(i);
+            self.1.remove(i);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -210,7 +236,6 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
     fn contains(&self, i: Index) -> bool {
         BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1))).contains(i)
     }
-
 }
 
 macro_rules! operator {

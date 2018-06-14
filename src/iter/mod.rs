@@ -1,11 +1,14 @@
 use util::*;
 use {BitSet, BitSetLike};
 
+pub use self::drain::DrainBitIter;
+
 #[cfg(feature="parallel")]
 pub use self::parallel::{BitParIter, BitProducer};
 
 #[cfg(feature="parallel")]
 mod parallel;
+mod drain;
 
 /// An `Iterator` over a [`BitSetLike`] structure.
 ///

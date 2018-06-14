@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use atom::AtomSetOnce;
 
 use util::*;
-use BitSetLike;
+use {BitSetLike, DrainableBitSet};
 
 /// This is similar to a [`BitSet`] but allows setting of value
 /// without unique ownership of the structure
@@ -175,6 +175,13 @@ impl BitSetLike for AtomicBitSet {
     #[inline]
     fn contains(&self, i: Index) -> bool {
         self.contains(i)
+    }
+}
+
+impl DrainableBitSet for AtomicBitSet {
+    #[inline]
+    fn remove(&mut self, i: Index) -> bool {
+        self.remove(i)
     }
 }
 

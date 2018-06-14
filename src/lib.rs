@@ -18,7 +18,7 @@ mod ops;
 mod util;
 
 pub use atomic::AtomicBitSet;
-pub use iter::BitIter;
+pub use iter::{BitIter, DrainBitIter};
 #[cfg(feature="parallel")]
 pub use iter::{BitParIter, BitProducer};
 pub use ops::{BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
@@ -249,6 +249,23 @@ pub trait BitSetLike {
     }
 }
 
+/// A extension to the [`BitSetLike`] trait which allows draining it.
+pub trait DrainableBitSet: BitSetLike {
+    /// Removes bit from the bit set.
+    /// 
+    /// Returns `true` if removal happened and `false` otherwise.
+    fn remove(&mut self, i: Index) -> bool;
+
+    /// Create a draining iterator that will scan over the keyspace and clears it while doing so.
+    fn drain<'a>(&'a mut self) -> DrainBitIter<'a, Self>
+        where Self: Sized
+    {
+        let layer3 = self.layer3();
+
+        DrainBitIter::new(self, [0, 0, 0, layer3], [0; LAYERS - 1])
+    }
+}
+
 impl<'a, T> BitSetLike for &'a T
     where T: BitSetLike
 {
@@ -307,6 +324,15 @@ impl<'a, T> BitSetLike for &'a mut T
     }
 }
 
+impl<'a, T> DrainableBitSet for &'a mut T
+    where T: DrainableBitSet
+{   
+    #[inline]
+    fn remove(&mut self, i: Index) -> bool {
+        (**self).remove(i)
+    }
+}
+
 impl BitSetLike for BitSet {
     #[inline]
     fn layer3(&self) -> usize {
@@ -331,6 +357,13 @@ impl BitSetLike for BitSet {
     #[inline]
     fn contains(&self, i: Index) -> bool {
         self.contains(i)
+    }
+}
+
+impl DrainableBitSet for BitSet {
+    #[inline]
+    fn remove(&mut self, i: Index) -> bool {
+        self.remove(i)
     }
 }
 
