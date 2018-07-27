@@ -3,6 +3,45 @@
 //! Provides hierarchical bit sets,
 //! which allow very fast iteration
 //! on sparse data structures.
+//!
+//! ## What it does
+//!
+//! A `BitSet` may be considered analogous to a `HashSet<u32>`. It
+//! tracks whether or not certain indices exist within it. Its
+//! implementation is very different, however.
+//!
+//! At its root, a `BitSet` relies on an array of bits, which express
+//! whether or not indices exist. This provides the functionality to
+//! `add( )` and `remove( )` indices.
+//!
+//! This array is referred to as Layer 0. Above it, there is another
+//! layer: Layer 1. Layer 1 acts as a 'summary' of Layer 0. It contains
+//! one bit for each `usize` bits of Layer 0. If any bit in that `usize`
+//! of Layer 0 is set, the bit in Layer 1 will be set.
+//!
+//! There are, in total, four layers. Layers 1 through 3 are each a
+//! a summary of the layer immediately below them.
+//!
+//! ```no_compile
+//! Example, with an imaginary 4-bit usize:
+//!
+//! Layer 3: 1------------------------------------------------ ...
+//! Layer 2: 1------------------ 1------------------ 0-------- ...
+//! Layer 1: 1--- 0--- 0--- 0--- 1--- 0--- 1--- 0--- 0--- 0--- ...
+//! Layer 0: 0010 0000 0000 0000 0011 0000 1111 0000 0000 0000 ...
+//! ```
+//! 
+//! This method makes operations that operate over the whole `BitSet`,
+//! such as unions, intersections, and iteration, very fast (because if
+//! any bit in any summary layer is zero, an entire range of bits
+//! below it can be skipped.)
+//!
+//! However, there is a maximum on index size. The top layer (Layer 3)
+//! of the BitSet is a single `usize` long. This makes the maximum index
+//! `usize**4` (`1,048,576` for a 32-bit `usize`, `16,777,216` for a
+//! 64-bit `usize`). Attempting to add indices larger than that will cause
+//! the `BitSet` to panic.
+//! 
 
 #![deny(missing_docs)]
 
@@ -25,11 +64,10 @@ pub use ops::{BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
 
 use util::*;
 
-/// A `BitSet` is a simple set designed to track entity indices for which
-/// a certain component exists. It does not track the `Generation` of the
-/// entities that it contains.
+/// A `BitSet` is a simple set designed to track which indices are placed
+/// into it.
 ///
-/// Note, a `BitSet` is limited by design to only `1,048,576` indices.
+/// Note, a `BitSet` is limited by design to only `usize**4` indices.
 /// Adding beyond this limit will cause the `BitSet` to panic.
 #[derive(Clone, Debug, Default)]
 pub struct BitSet {
