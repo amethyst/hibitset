@@ -1,6 +1,7 @@
 
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::iter::{FromIterator, IntoIterator};
+use std::usize;
 
 use util::*;
 
@@ -245,19 +246,19 @@ pub struct BitSetAll;
 impl BitSetLike for BitSetAll {
     #[inline]
     fn layer3(&self) -> usize {
-        ::std::usize::MAX
+        usize::MAX
     }
     #[inline]
     fn layer2(&self, _id: usize) -> usize {
-        ::std::usize::MAX
+        usize::MAX
     }
     #[inline]
     fn layer1(&self, _id: usize) -> usize {
-        ::std::usize::MAX
+        usize::MAX
     }
     #[inline]
     fn layer0(&self, _id: usize) -> usize {
-        ::std::usize::MAX
+        usize::MAX
     }
     #[inline]
     fn contains(&self, _i: Index) -> bool {
