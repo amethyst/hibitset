@@ -60,7 +60,7 @@ pub use atomic::AtomicBitSet;
 pub use iter::{BitIter, DrainBitIter};
 #[cfg(feature="parallel")]
 pub use iter::{BitParIter, BitProducer};
-pub use ops::{BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
+pub use ops::{BitSetAll, BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
 
 use util::*;
 

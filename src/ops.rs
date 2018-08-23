@@ -1,6 +1,7 @@
 
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::iter::{FromIterator, IntoIterator};
+use std::usize;
 
 use util::*;
 
@@ -238,6 +239,33 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
     }
 }
 
+/// `BitSetAll` is a bitset with all bits set. Essentially the same as
+/// `BitSetNot(BitSet::new())` but without any allocation.
+#[derive(Debug)]
+pub struct BitSetAll;
+impl BitSetLike for BitSetAll {
+    #[inline]
+    fn layer3(&self) -> usize {
+        usize::MAX
+    }
+    #[inline]
+    fn layer2(&self, _id: usize) -> usize {
+        usize::MAX
+    }
+    #[inline]
+    fn layer1(&self, _id: usize) -> usize {
+        usize::MAX
+    }
+    #[inline]
+    fn layer0(&self, _id: usize) -> usize {
+        usize::MAX
+    }
+    #[inline]
+    fn contains(&self, _i: Index) -> bool {
+        true
+    }
+}
+
 macro_rules! operator {
     ( impl < ( $( $lifetime:tt )* ) ( $( $arg:ident ),* ) > for $bitset:ty ) => {
         impl<$( $lifetime, )* $( $arg ),*> IntoIterator for $bitset
@@ -304,6 +332,8 @@ operator!(impl<()(A, B)> for BitSetOr<A, B>);
 operator!(impl<('a)(A, B)> for &'a BitSetOr<A, B>);
 operator!(impl<()(A, B)> for BitSetXor<A, B>);
 operator!(impl<('a)(A, B)> for &'a BitSetXor<A, B>);
+operator!(impl<()()> for BitSetAll);
+operator!(impl<('a)()> for &'a BitSetAll);
 
 macro_rules! iterator {
     ( $bitset:ident ) => {
