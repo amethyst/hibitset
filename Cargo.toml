@@ -6,7 +6,7 @@ documentation = "https://docs.rs/hibitset"
 repository = "https://github.com/slide-rs/hibitset"
 keywords = ["bitset", "container", "data-structures", "hierarchical"]
 categories = ["data-structures"]
-license = "Apache-2.0"
+license = "MIT/Apache-2.0"
 authors = ["csheratt"]
 
 [dependencies]
