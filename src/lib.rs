@@ -250,6 +250,11 @@ pub trait BitSetLike {
         }
     }
 
+    /// Returns true if this `BitSetLike` contains nothing, and false otherwise.
+    fn is_empty(&self) -> bool {
+        self.layer3() == 0
+    }
+
     /// Return a `usize` where each bit represents if any word in layer2
     /// has been set.
     fn layer3(&self) -> usize;
