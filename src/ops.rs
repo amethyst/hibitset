@@ -1,6 +1,5 @@
-
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::iter::{FromIterator, IntoIterator};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use std::usize;
 
 use util::*;
@@ -8,7 +7,8 @@ use util::*;
 use {AtomicBitSet, BitIter, BitSet, BitSetLike, DrainableBitSet};
 
 impl<'a, B> BitOrAssign<&'a B> for BitSet
-    where B: BitSetLike
+where
+    B: BitSetLike,
 {
     fn bitor_assign(&mut self, lhs: &B) {
         use iter::State::Continue;
@@ -23,7 +23,8 @@ impl<'a, B> BitOrAssign<&'a B> for BitSet
 }
 
 impl<'a, B> BitAndAssign<&'a B> for BitSet
-    where B: BitSetLike
+where
+    B: BitSetLike,
 {
     fn bitand_assign(&mut self, lhs: &B) {
         use iter::State::*;
@@ -44,7 +45,7 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
             *self.layer_mut(lower, idx) &= their_layer;
         }
         let mut masks = [0; LAYERS];
-        masks[LAYERS - 1] =  self.layer3() & !lhs.layer3();
+        masks[LAYERS - 1] = self.layer3() & !lhs.layer3();
         BitIter::new(&mut *self, masks, [0; LAYERS - 1]).clear();
 
         self.layer3 &= lhs.layer3();
@@ -52,7 +53,8 @@ impl<'a, B> BitAndAssign<&'a B> for BitSet
 }
 
 impl<'a, B> BitXorAssign<&'a B> for BitSet
-    where B: BitSetLike
+where
+    B: BitSetLike,
 {
     fn bitxor_assign(&mut self, lhs: &B) {
         use iter::State::*;
@@ -215,27 +217,43 @@ pub struct BitSetXor<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
     #[inline]
     fn layer3(&self) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        let xor = BitSetAnd(
+            BitSetOr(&self.0, &self.1),
+            BitSetNot(BitSetAnd(&self.0, &self.1)),
+        );
         xor.layer3()
     }
     #[inline]
     fn layer2(&self, id: usize) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        let xor = BitSetAnd(
+            BitSetOr(&self.0, &self.1),
+            BitSetNot(BitSetAnd(&self.0, &self.1)),
+        );
         xor.layer2(id)
     }
     #[inline]
     fn layer1(&self, id: usize) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        let xor = BitSetAnd(
+            BitSetOr(&self.0, &self.1),
+            BitSetNot(BitSetAnd(&self.0, &self.1)),
+        );
         xor.layer1(id)
     }
     #[inline]
     fn layer0(&self, id: usize) -> usize {
-        let xor = BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1)));
+        let xor = BitSetAnd(
+            BitSetOr(&self.0, &self.1),
+            BitSetNot(BitSetAnd(&self.0, &self.1)),
+        );
         xor.layer0(id)
     }
     #[inline]
     fn contains(&self, i: Index) -> bool {
-        BitSetAnd(BitSetOr(&self.0, &self.1), BitSetNot(BitSetAnd(&self.0, &self.1))).contains(i)
+        BitSetAnd(
+            BitSetOr(&self.0, &self.1),
+            BitSetNot(BitSetAnd(&self.0, &self.1)),
+        )
+        .contains(i)
     }
 }
 
@@ -349,7 +367,7 @@ macro_rules! iterator {
                 bitset
             }
         }
-        
+
         impl<'a> FromIterator<&'a Index> for $bitset {
             fn from_iter<T>(iter: T) -> Self
             where
@@ -385,7 +403,6 @@ macro_rules! iterator {
             }
         }
     };
-
 }
 
 iterator!(BitSet);
@@ -393,12 +410,12 @@ iterator!(AtomicBitSet);
 
 #[cfg(test)]
 mod tests {
-    use {Index, BitSet, BitSetLike, BitSetXor};
+    use {BitSet, BitSetLike, BitSetXor, Index};
 
     #[test]
     fn or_assign() {
-        use std::mem::size_of;
         use std::collections::HashSet;
+        use std::mem::size_of;
 
         let usize_bits = size_of::<usize>() as u32 * 8;
         let n = 10_000;
@@ -412,10 +429,7 @@ mod tests {
 
         let h1: HashSet<_> = (0..n).map(f1).collect();
         let h2: HashSet<_> = (0..n).map(f2).collect();
-        assert_eq!(
-            c1.iter().collect::<HashSet<_>>(),
-            &h1 | &h2
-        );
+        assert_eq!(c1.iter().collect::<HashSet<_>>(), &h1 | &h2);
     }
 
     #[test]
@@ -433,7 +447,7 @@ mod tests {
             set1.add(index);
             check_set1.insert(index);
         }
-        
+
         let mut set2 = BitSet::new();
         let mut check_set2 = HashSet::new();
         for _ in 0..(limit / 100) {
@@ -459,8 +473,8 @@ mod tests {
 
     #[test]
     fn and_assign() {
-        use std::mem::size_of;
         use std::collections::HashSet;
+        use std::mem::size_of;
 
         let usize_bits = size_of::<usize>() as u32 * 8;
         let n = 10_000;
@@ -474,10 +488,7 @@ mod tests {
 
         let h1: HashSet<_> = (0..n).map(f1).collect();
         let h2: HashSet<_> = (0..n).map(f2).collect();
-        assert_eq!(
-            c1.iter().collect::<HashSet<_>>(),
-            &h1 & &h2
-        );
+        assert_eq!(c1.iter().collect::<HashSet<_>>(), &h1 & &h2);
     }
 
     #[test]
@@ -533,7 +544,7 @@ mod tests {
             set1.add(index);
             check_set1.insert(index);
         }
-        
+
         let mut set2 = BitSet::new();
         let mut check_set2 = HashSet::new();
         for _ in 0..(limit / 100) {
@@ -559,8 +570,8 @@ mod tests {
 
     #[test]
     fn xor_assign() {
-        use std::mem::size_of;
         use std::collections::HashSet;
+        use std::mem::size_of;
 
         let usize_bits = size_of::<usize>() as u32 * 8;
         let n = 10_000;
@@ -573,10 +584,7 @@ mod tests {
 
         let h1: HashSet<_> = (0..n).map(f1).collect();
         let h2: HashSet<_> = (0..n).map(f2).collect();
-        assert_eq!(
-            c1.iter().collect::<HashSet<_>>(),
-            &h1 ^ &h2
-        );
+        assert_eq!(c1.iter().collect::<HashSet<_>>(), &h1 ^ &h2);
     }
 
     #[test]
@@ -614,7 +622,7 @@ mod tests {
             set1.add(index);
             check_set1.insert(index);
         }
-        
+
         let mut set2 = BitSet::new();
         let mut check_set2 = HashSet::new();
         for _ in 0..(limit / 100) {

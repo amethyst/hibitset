@@ -4,8 +4,8 @@ extern crate hibitset;
 extern crate test;
 
 mod bitset {
-    use test;
     use hibitset::BitSet;
+    use test;
 
     #[bench]
     fn add(b: &mut test::Bencher) {
@@ -45,8 +45,8 @@ mod bitset {
 }
 
 mod atomic_bitset {
-    use test;
     use hibitset::AtomicBitSet;
+    use test;
 
     #[bench]
     fn add(b: &mut test::Bencher) {

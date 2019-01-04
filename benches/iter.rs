@@ -1,16 +1,16 @@
 #![feature(test)]
 extern crate hibitset;
-extern crate test;
 extern crate rand;
 #[cfg(feature = "parallel")]
 extern crate rayon;
+extern crate test;
 
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 
 use hibitset::{BitSet, BitSetLike};
 
-use test::{Bencher, black_box};
+use test::{black_box, Bencher};
 
 use rand::{Rng, XorShiftRng};
 
@@ -32,7 +32,15 @@ fn bench(n: usize, mode: Mode, b: &mut Bencher) {
     match mode {
         Seq => b.iter(|| black_box((&bitset).iter().map(black_box).count())),
         #[cfg(feature = "parallel")]
-        Par(splits) => b.iter(|| black_box((&bitset).par_iter().layers_split(splits).map(black_box).count()))
+        Par(splits) => b.iter(|| {
+            black_box(
+                (&bitset)
+                    .par_iter()
+                    .layers_split(splits)
+                    .map(black_box)
+                    .count(),
+            )
+        }),
     }
 }
 
@@ -60,7 +68,6 @@ fn iter_100000(b: &mut Bencher) {
 fn iter_1000000(b: &mut Bencher) {
     bench(1000000, Seq, b);
 }
-
 
 #[cfg(feature = "parallel")]
 mod par {
@@ -123,12 +130,20 @@ mod par {
             let index = rng.gen_range(0, 1048576);
             bitset.add(index);
         }
-        b.iter(|| black_box((&bitset).par_iter().layers_split(splits).map(|mut n| {
-            for i in 0..payload {
-                n += black_box(i);
-            }
-            black_box(n)
-        }).count()));
+        b.iter(|| {
+            black_box(
+                (&bitset)
+                    .par_iter()
+                    .layers_split(splits)
+                    .map(|mut n| {
+                        for i in 0..payload {
+                            n += black_box(i);
+                        }
+                        black_box(n)
+                    })
+                    .count(),
+            )
+        });
     }
 
     #[bench]

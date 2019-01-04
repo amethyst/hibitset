@@ -30,7 +30,7 @@
 //! Layer 1: 1--- 0--- 0--- 0--- 1--- 0--- 1--- 0--- 0--- 0--- ...
 //! Layer 0: 0010 0000 0000 0000 0011 0000 1111 0000 0000 0000 ...
 //! ```
-//! 
+//!
 //! This method makes operations that operate over the whole `BitSet`,
 //! such as unions, intersections, and iteration, very fast (because if
 //! any bit in any summary layer is zero, an entire range of bits
@@ -41,15 +41,15 @@
 //! `usize**4` (`1,048,576` for a 32-bit `usize`, `16,777,216` for a
 //! 64-bit `usize`). Attempting to add indices larger than that will cause
 //! the `BitSet` to panic.
-//! 
+//!
 
 #![deny(missing_docs)]
 
 extern crate atom;
-#[cfg(feature="parallel")]
-extern crate rayon;
 #[cfg(test)]
 extern crate rand;
+#[cfg(feature = "parallel")]
+extern crate rayon;
 
 mod atomic;
 mod iter;
@@ -58,7 +58,7 @@ mod util;
 
 pub use atomic::AtomicBitSet;
 pub use iter::{BitIter, DrainBitIter};
-#[cfg(feature="parallel")]
+#[cfg(feature = "parallel")]
 pub use iter::{BitParIter, BitProducer};
 pub use ops::{BitSetAll, BitSetAnd, BitSetNot, BitSetOr, BitSetXor};
 
@@ -276,7 +276,8 @@ pub trait BitSetLike {
 
     /// Create an iterator that will scan over the keyspace
     fn iter(self) -> BitIter<Self>
-        where Self: Sized
+    where
+        Self: Sized,
     {
         let layer3 = self.layer3();
 
@@ -284,9 +285,10 @@ pub trait BitSetLike {
     }
 
     /// Create a parallel iterator that will scan over the keyspace
-    #[cfg(feature="parallel")]
+    #[cfg(feature = "parallel")]
     fn par_iter(self) -> BitParIter<Self>
-        where Self: Sized
+    where
+        Self: Sized,
     {
         BitParIter::new(self)
     }
@@ -295,13 +297,14 @@ pub trait BitSetLike {
 /// A extension to the [`BitSetLike`] trait which allows draining it.
 pub trait DrainableBitSet: BitSetLike {
     /// Removes bit from the bit set.
-    /// 
+    ///
     /// Returns `true` if removal happened and `false` otherwise.
     fn remove(&mut self, i: Index) -> bool;
 
     /// Create a draining iterator that will scan over the keyspace and clears it while doing so.
     fn drain<'a>(&'a mut self) -> DrainBitIter<'a, Self>
-        where Self: Sized
+    where
+        Self: Sized,
     {
         let layer3 = self.layer3();
 
@@ -310,7 +313,8 @@ pub trait DrainableBitSet: BitSetLike {
 }
 
 impl<'a, T> BitSetLike for &'a T
-    where T: BitSetLike
+where
+    T: BitSetLike,
 {
     #[inline]
     fn layer3(&self) -> usize {
@@ -339,7 +343,8 @@ impl<'a, T> BitSetLike for &'a T
 }
 
 impl<'a, T> BitSetLike for &'a mut T
-    where T: BitSetLike
+where
+    T: BitSetLike,
 {
     #[inline]
     fn layer3(&self) -> usize {
@@ -368,8 +373,9 @@ impl<'a, T> BitSetLike for &'a mut T
 }
 
 impl<'a, T> DrainableBitSet for &'a mut T
-    where T: DrainableBitSet
-{   
+where
+    T: DrainableBitSet,
+{
     #[inline]
     fn remove(&mut self, i: Index) -> bool {
         (**self).remove(i)
@@ -412,7 +418,7 @@ impl DrainableBitSet for BitSet {
 
 #[cfg(test)]
 mod tests {
-    use super::{BitSet, BitSetAnd, BitSetNot, BitSetLike};
+    use super::{BitSet, BitSetAnd, BitSetLike, BitSetNot};
 
     #[test]
     fn insert() {
@@ -534,7 +540,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature="parallel"))]
+#[cfg(all(test, feature = "parallel"))]
 mod test_parallel {
     use super::{BitSet, BitSetAnd, BitSetLike};
     use rayon::iter::ParallelIterator;
@@ -571,27 +577,35 @@ mod test_parallel {
         }
         let check_set = Arc::new(Mutex::new(check_set));
         let missing_set = Arc::new(Mutex::new(HashSet::new()));
-        set.par_iter()
-            .for_each(|n| {
-                let check_set = check_set.clone();
-                let missing_set = missing_set.clone();
-                let mut check = check_set.lock().unwrap();
-                if !check.remove(&n) {
-                    let mut missing = missing_set.lock().unwrap();
-                    missing.insert(n);
-                }
-            });
+        set.par_iter().for_each(|n| {
+            let check_set = check_set.clone();
+            let missing_set = missing_set.clone();
+            let mut check = check_set.lock().unwrap();
+            if !check.remove(&n) {
+                let mut missing = missing_set.lock().unwrap();
+                missing.insert(n);
+            }
+        });
         let check_set = check_set.lock().unwrap();
         let missing_set = missing_set.lock().unwrap();
         if !check_set.is_empty() && !missing_set.is_empty() {
-            panic!("There were values that didn't get iterated: {:?}
-            There were values that got iterated, but that shouldn't be: {:?}", *check_set, *missing_set);
+            panic!(
+                "There were values that didn't get iterated: {:?}
+            There were values that got iterated, but that shouldn't be: {:?}",
+                *check_set, *missing_set
+            );
         }
         if !check_set.is_empty() {
-            panic!("There were values that didn't get iterated: {:?}", *check_set);
+            panic!(
+                "There were values that didn't get iterated: {:?}",
+                *check_set
+            );
         }
         if !missing_set.is_empty() {
-            panic!("There were values that got iterated, but that shouldn't be: {:?}", *missing_set);
+            panic!(
+                "There were values that got iterated, but that shouldn't be: {:?}",
+                *missing_set
+            );
         }
     }
 
@@ -632,27 +646,35 @@ mod test_parallel {
         }
         let check_set = Arc::new(Mutex::new(check_set));
         let missing_set = Arc::new(Mutex::new(HashSet::new()));
-        set.par_iter()
-            .for_each(|n| {
-                let check_set = check_set.clone();
-                let missing_set = missing_set.clone();
-                let mut check = check_set.lock().unwrap();
-                if !check.remove(&n) {
-                    let mut missing = missing_set.lock().unwrap();
-                    missing.insert(n);
-                }
-            });
+        set.par_iter().for_each(|n| {
+            let check_set = check_set.clone();
+            let missing_set = missing_set.clone();
+            let mut check = check_set.lock().unwrap();
+            if !check.remove(&n) {
+                let mut missing = missing_set.lock().unwrap();
+                missing.insert(n);
+            }
+        });
         let check_set = check_set.lock().unwrap();
         let missing_set = missing_set.lock().unwrap();
         if !check_set.is_empty() && !missing_set.is_empty() {
-            panic!("There were values that didn't get iterated: {:?}
-            There were values that got iterated, but that shouldn't be: {:?}", *check_set, *missing_set);
+            panic!(
+                "There were values that didn't get iterated: {:?}
+            There were values that got iterated, but that shouldn't be: {:?}",
+                *check_set, *missing_set
+            );
         }
         if !check_set.is_empty() {
-            panic!("There were values that didn't get iterated: {:?}", *check_set);
+            panic!(
+                "There were values that didn't get iterated: {:?}",
+                *check_set
+            );
         }
         if !missing_set.is_empty() {
-            panic!("There were values that got iterated, but that shouldn't be: {:?}", *missing_set);
+            panic!(
+                "There were values that got iterated, but that shouldn't be: {:?}",
+                *missing_set
+            );
         }
     }
 }

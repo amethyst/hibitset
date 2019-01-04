@@ -3,12 +3,12 @@ use {BitSet, BitSetLike};
 
 pub use self::drain::DrainBitIter;
 
-#[cfg(feature="parallel")]
+#[cfg(feature = "parallel")]
 pub use self::parallel::{BitParIter, BitProducer};
 
-#[cfg(feature="parallel")]
-mod parallel;
 mod drain;
+#[cfg(feature = "parallel")]
+mod parallel;
 
 /// An `Iterator` over a [`BitSetLike`] structure.
 ///
@@ -60,11 +60,12 @@ impl<'a> BitIter<&'a mut BitSet> {
 pub(crate) enum State {
     Empty,
     Continue,
-    Value(Index)
+    Value(Index),
 }
 
 impl<T> Iterator for BitIter<T>
-    where T: BitSetLike
+where
+    T: BitSetLike,
 {
     type Item = Index;
 
@@ -75,7 +76,7 @@ impl<T> Iterator for BitIter<T>
                 match self.handle_level(level) {
                     Value(v) => return Some(v),
                     Continue => continue 'find,
-                    Empty => {},
+                    Empty => {}
                 }
             }
             // There is no set bits left
@@ -111,8 +112,8 @@ impl<T: BitSetLike> BitIter<T> {
 
 #[cfg(test)]
 mod tests {
-    use ::{BitSet, BitSetLike};
-    
+    use {BitSet, BitSetLike};
+
     #[test]
     fn iterator_clear_empties() {
         use rand::prelude::*;
