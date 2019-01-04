@@ -12,7 +12,7 @@ use hibitset::{BitSet, BitSetLike};
 
 use test::{black_box, Bencher};
 
-use rand::{Rng, XorShiftRng};
+use rand::prelude::*;
 
 use self::Mode::*;
 
@@ -23,7 +23,7 @@ enum Mode {
 }
 
 fn bench(n: usize, mode: Mode, b: &mut Bencher) {
-    let mut rng = XorShiftRng::new_unseeded();
+    let mut rng = thread_rng();
     let mut bitset = BitSet::with_capacity(1048576);
     for _ in 0..n {
         let index = rng.gen_range(0, 1048576);
@@ -124,7 +124,7 @@ mod par {
     }
 
     fn bench_payload(n: usize, splits: u8, payload: u32, b: &mut Bencher) {
-        let mut rng = XorShiftRng::new_unseeded();
+        let mut rng = thread_rng();
         let mut bitset = BitSet::with_capacity(1048576);
         for _ in 0..n {
             let index = rng.gen_range(0, 1048576);
