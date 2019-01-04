@@ -488,9 +488,10 @@ mod tests {
 
     #[test]
     fn iter_random_add() {
-        use rand::{Rng, weak_rng};
+        use rand::prelude::*;
+
         let mut set = BitSet::new();
-        let mut rng = weak_rng();
+        let mut rng = thread_rng();
         let limit = 1_048_576;
         let mut added = 0;
         for _ in 0..(limit / 10) {
@@ -555,12 +556,13 @@ mod test_parallel {
 
     #[test]
     fn par_iter_random_add() {
-        use rand::{Rng, weak_rng};
+        use rand::prelude::*;
         use std::collections::HashSet;
         use std::sync::{Arc, Mutex};
+
         let mut set = BitSet::new();
         let mut check_set = HashSet::new();
-        let mut rng = weak_rng();
+        let mut rng = thread_rng();
         let limit = 1_048_576;
         for _ in 0..(limit / 10) {
             let index = rng.gen_range(0, limit);

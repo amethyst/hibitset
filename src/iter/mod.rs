@@ -115,9 +115,10 @@ mod tests {
     
     #[test]
     fn iterator_clear_empties() {
-        use rand::{Rng, weak_rng};
+        use rand::prelude::*;
+
         let mut set = BitSet::new();
-        let mut rng = weak_rng();
+        let mut rng = thread_rng();
         let limit = 1_048_576;
         for _ in 0..(limit / 10) {
             set.add(rng.gen_range(0, limit));

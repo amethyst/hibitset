@@ -420,10 +420,11 @@ mod tests {
 
     #[test]
     fn or_assign_random() {
-        use rand::{Rng, weak_rng};
+        use rand::prelude::*;
+
         use std::collections::HashSet;
         let limit = 1_048_576;
-        let mut rng = weak_rng();
+        let mut rng = thread_rng();
 
         let mut set1 = BitSet::new();
         let mut check_set1 = HashSet::new();
@@ -519,10 +520,11 @@ mod tests {
 
     #[test]
     fn and_assign_random() {
-        use rand::{Rng, weak_rng};
+        use rand::prelude::*;
+
         use std::collections::HashSet;
         let limit = 1_048_576;
-        let mut rng = weak_rng();
+        let mut rng = thread_rng();
 
         let mut set1 = BitSet::new();
         let mut check_set1 = HashSet::new();
@@ -600,10 +602,10 @@ mod tests {
 
     #[test]
     fn xor_assign_random() {
-        use rand::{Rng, weak_rng};
+        use rand::prelude::*;
         use std::collections::HashSet;
         let limit = 1_048_576;
-        let mut rng = weak_rng();
+        let mut rng = thread_rng();
 
         let mut set1 = BitSet::new();
         let mut check_set1 = HashSet::new();
