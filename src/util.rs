@@ -1,11 +1,10 @@
-
 /// Type used for indexing.
 pub type Index = u32;
 
 /// Base two log of the number of bits in a usize.
-#[cfg(target_pointer_width= "64")]
+#[cfg(target_pointer_width = "64")]
 pub const BITS: usize = 6;
-#[cfg(target_pointer_width= "32")]
+#[cfg(target_pointer_width = "32")]
 pub const BITS: usize = 5;
 /// Amount of layers in the hierarchical bitset.
 pub const LAYERS: usize = 4;
@@ -72,7 +71,7 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 /// ````
 // TODO: Can 64/32 bit variants be merged to one implementation?
 // Seems that this would need integer generics to do.
-#[cfg(feature="parallel")]
+#[cfg(feature = "parallel")]
 pub fn average_ones(n: usize) -> Option<usize> {
     #[cfg(target_pointer_width = "64")]
     let average = average_ones_u64(n as u64).map(|n| n as usize);
@@ -83,16 +82,10 @@ pub fn average_ones(n: usize) -> Option<usize> {
     average
 }
 
-#[cfg(all(any(test, target_pointer_width = "32"), feature="parallel"))]
+#[cfg(all(any(test, target_pointer_width = "32"), feature = "parallel"))]
 fn average_ones_u32(n: u32) -> Option<u32> {
     // !0 / ((1 << (1 << n)) | 1)
-    const PAR: [u32; 5] = [
-        !0 / 0x3,
-        !0 / 0x5,
-        !0 / 0x11,
-        !0 / 0x101,
-        !0 / 0x10001
-    ];
+    const PAR: [u32; 5] = [!0 / 0x3, !0 / 0x5, !0 / 0x11, !0 / 0x101, !0 / 0x10001];
 
     // Counting set bits in parallel
     let a = n - ((n >> 1) & PAR[0]);
@@ -121,10 +114,10 @@ fn average_ones_u32(n: u32) -> Option<u32> {
             cur = (child >> (result - child_stride)) & child_mask;
         };
         //(!PAR[n] & (PAR[n] + 1)) - 1
-        descend(c, 8, 16 - 1);// PAR[3]
-        descend(b, 4, 8 - 1);// PAR[2]
-        descend(a, 2, 4 - 1);// PAR[1]
-        descend(n, 1, 2 - 1);// PAR[0]
+        descend(c, 8, 16 - 1); // PAR[3]
+        descend(b, 4, 8 - 1); // PAR[2]
+        descend(a, 2, 4 - 1); // PAR[1]
+        descend(n, 1, 2 - 1); // PAR[0]
     }
     if cur < target {
         result -= 1;
@@ -133,7 +126,7 @@ fn average_ones_u32(n: u32) -> Option<u32> {
     Some(result - 1)
 }
 
-#[cfg(all(any(test, target_pointer_width = "64"), feature="parallel"))]
+#[cfg(all(any(test, target_pointer_width = "64"), feature = "parallel"))]
 fn average_ones_u64(n: u64) -> Option<u64> {
     // !0 / ((1 << (1 << n)) | 1)
     const PAR: [u64; 6] = [
@@ -142,7 +135,7 @@ fn average_ones_u64(n: u64) -> Option<u64> {
         !0 / 0x11,
         !0 / 0x101,
         !0 / 0x10001,
-        !0 / 0x100000001
+        !0 / 0x100000001,
     ];
 
     // Counting set bits in parallel
@@ -173,11 +166,11 @@ fn average_ones_u64(n: u64) -> Option<u64> {
             cur = (child >> (result - child_stride)) & child_mask;
         };
         //(!PAR[n] & (PAR[n] + 1)) - 1
-        descend(d, 16, 256 - 1);// PAR[4]
-        descend(c,  8, 16 - 1);// PAR[3]
-        descend(b,  4, 8 - 1);// PAR[2]
-        descend(a,  2, 4 - 1);// PAR[1]
-        descend(n,  1, 2 - 1);// PAR[0]
+        descend(d, 16, 256 - 1); // PAR[4]
+        descend(c, 8, 16 - 1); // PAR[3]
+        descend(b, 4, 8 - 1); // PAR[2]
+        descend(a, 2, 4 - 1); // PAR[1]
+        descend(n, 1, 2 - 1); // PAR[0]
     }
     if cur < target {
         result -= 1;
@@ -186,7 +179,7 @@ fn average_ones_u64(n: u64) -> Option<u64> {
     Some(result - 1)
 }
 
-#[cfg(all(test, feature="parallel"))]
+#[cfg(all(test, feature = "parallel"))]
 mod test_average_ones {
     use super::*;
     #[test]
@@ -215,11 +208,7 @@ mod test_average_ones {
             let pos = i * (u32::max_value() / steps);
             for i in EvenParity(pos).take(steps as usize) {
                 let mask = (1 << average_ones_u32(i).unwrap_or(31)) - 1;
-                assert_eq!(
-                    (i & mask).count_ones(),
-                    (i & !mask).count_ones(),
-                    "{:x}", i
-                );
+                assert_eq!((i & mask).count_ones(), (i & !mask).count_ones(), "{:x}", i);
             }
         }
     }
@@ -254,7 +243,7 @@ mod test_average_ones {
                 let b = (i & !mask).count_ones();
                 if a < b {
                     assert_eq!(a + 1, b, "{:x}", i);
-                } else if b < a{
+                } else if b < a {
                     assert_eq!(a, b + 1, "{:x}", i);
                 } else {
                     panic!("Odd parity shouldn't split in exactly half");
@@ -271,11 +260,7 @@ mod test_average_ones {
     #[test]
     fn singleton_average_ones_u32() {
         for i in 0..32 {
-            assert_eq!(
-                None,
-                average_ones_u32(1 << i),
-                "{:x}", i
-            );
+            assert_eq!(None, average_ones_u32(1 << i), "{:x}", i);
         }
     }
 
@@ -305,11 +290,7 @@ mod test_average_ones {
             let pos = i * (u64::max_value() / steps);
             for i in EvenParity(pos).take(steps as usize) {
                 let mask = (1 << average_ones_u64(i).unwrap_or(63)) - 1;
-                assert_eq!(
-                    (i & mask).count_ones(),
-                    (i & !mask).count_ones(),
-                    "{:x}", i
-                );
+                assert_eq!((i & mask).count_ones(), (i & !mask).count_ones(), "{:x}", i);
             }
         }
     }
@@ -344,7 +325,7 @@ mod test_average_ones {
                 let b = (i & !mask).count_ones();
                 if a < b {
                     assert_eq!(a + 1, b, "{:x}", i);
-                } else if b < a{
+                } else if b < a {
                     assert_eq!(a, b + 1, "{:x}", i);
                 } else {
                     panic!("Odd parity shouldn't split in exactly half");
@@ -361,11 +342,7 @@ mod test_average_ones {
     #[test]
     fn singleton_average_ones_u64() {
         for i in 0..64 {
-            assert_eq!(
-                None,
-                average_ones_u64(1 << i),
-                "{:x}", i
-            );
+            assert_eq!(None, average_ones_u64(1 << i), "{:x}", i);
         }
     }
 
@@ -378,7 +355,8 @@ mod test_average_ones {
                 assert_eq!(
                     average_ones_u32(i),
                     average_ones_u64(i as u64).map(|n| n as u32),
-                    "{:x}", i
+                    "{:x}",
+                    i
                 );
             }
         }

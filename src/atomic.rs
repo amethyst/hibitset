@@ -250,11 +250,11 @@ impl AtomicBlock {
 
     fn clear(&mut self) {
         self.mask.store(0, Ordering::Relaxed);
-        self.atom
-            .get()
-            .map(|l0| for l in &l0[..] {
-                     l.store(0, Ordering::Relaxed);
-                 });
+        self.atom.get().map(|l0| {
+            for l in &l0[..] {
+                l.store(0, Ordering::Relaxed);
+            }
+        });
     }
 }
 

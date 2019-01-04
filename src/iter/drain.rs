@@ -1,5 +1,5 @@
-use util::*;
 use iter::BitIter;
+use util::*;
 use DrainableBitSet;
 
 /// A draining `Iterator` over a [`DrainableBitSet`] structure.
@@ -22,7 +22,8 @@ impl<'a, T: DrainableBitSet> DrainBitIter<'a, T> {
 }
 
 impl<'a, T> Iterator for DrainBitIter<'a, T>
-    where T: DrainableBitSet
+where
+    T: DrainableBitSet,
 {
     type Item = Index;
 
