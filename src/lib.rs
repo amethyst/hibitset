@@ -214,6 +214,17 @@ impl BitSet {
         p0 < self.layer0.len() && (self.layer0[p0] & id.mask(SHIFT0)) != 0
     }
 
+    /// Returns `true` if all ids in `other` are contained in this set
+    #[inline]
+    pub fn contains_set(&self, other: &BitSet) -> bool {
+        for id in other.iter() {
+            if !self.contains(id) {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Completely wipes out the bit set.
     pub fn clear(&mut self) {
         self.layer0.clear();
@@ -415,6 +426,40 @@ impl DrainableBitSet for BitSet {
         self.remove(i)
     }
 }
+
+impl PartialEq for BitSet {
+    #[inline]
+    fn eq(&self, rhv: &BitSet) -> bool {
+        if self.layer3 != rhv.layer3 {
+            return false;
+        }
+        if self.layer2.len() != rhv.layer2.len()
+            || self.layer1.len() != rhv.layer1.len()
+            || self.layer0.len() != rhv.layer0.len()
+        {
+            return false;
+        }
+
+        for i in 0..self.layer2.len() {
+            if self.layer2(i) != rhv.layer2(i) {
+                return false;
+            }
+        }
+        for i in 0..self.layer1.len() {
+            if self.layer1(i) != rhv.layer1(i) {
+                return false;
+            }
+        }
+        for i in 0..self.layer0.len() {
+            if self.layer0(i) != rhv.layer0(i) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+impl Eq for BitSet {}
 
 #[cfg(test)]
 mod tests {
