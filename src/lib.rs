@@ -383,6 +383,60 @@ where
     }
 }
 
+impl<'a> BitSetLike for &'a dyn BitSetLike {
+    #[inline]
+    fn layer3(&self) -> usize {
+        (*self).layer3()
+    }
+
+    #[inline]
+    fn layer2(&self, i: usize) -> usize {
+        (*self).layer2(i)
+    }
+
+    #[inline]
+    fn layer1(&self, i: usize) -> usize {
+        (*self).layer1(i)
+    }
+
+    #[inline]
+    fn layer0(&self, i: usize) -> usize {
+        (*self).layer0(i)
+    }
+
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        (*self).contains(i)
+    }
+}
+
+impl<'a> BitSetLike for &'a mut dyn BitSetLike {
+    #[inline]
+    fn layer3(&self) -> usize {
+        (**self).layer3()
+    }
+
+    #[inline]
+    fn layer2(&self, i: usize) -> usize {
+        (**self).layer2(i)
+    }
+
+    #[inline]
+    fn layer1(&self, i: usize) -> usize {
+        (**self).layer1(i)
+    }
+
+    #[inline]
+    fn layer0(&self, i: usize) -> usize {
+        (**self).layer0(i)
+    }
+
+    #[inline]
+    fn contains(&self, i: Index) -> bool {
+        (**self).contains(i)
+    }
+}
+
 impl<'a, T> DrainableBitSet for &'a mut T
 where
     T: DrainableBitSet,
