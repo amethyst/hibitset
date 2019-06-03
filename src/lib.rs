@@ -325,7 +325,7 @@ pub trait DrainableBitSet: BitSetLike {
 
 impl<'a, T> BitSetLike for &'a T
 where
-    T: BitSetLike,
+    T: BitSetLike + ?Sized,
 {
     #[inline]
     fn layer3(&self) -> usize {
@@ -355,7 +355,7 @@ where
 
 impl<'a, T> BitSetLike for &'a mut T
 where
-    T: BitSetLike,
+    T: BitSetLike + ?Sized,
 {
     #[inline]
     fn layer3(&self) -> usize {
