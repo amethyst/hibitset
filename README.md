@@ -11,7 +11,7 @@ Just add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hibitset = "0.1"
+hibitset = "0.6"
 ```
 
 ## License
