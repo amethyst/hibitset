@@ -144,8 +144,6 @@ impl BitSet {
         self.layer0[p0] |= mask;
         if old == 0 {
             self.add_slow(id);
-        } else {
-            self.layer0[p0] |= mask;
         }
         false
     }
