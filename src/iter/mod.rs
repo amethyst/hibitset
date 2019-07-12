@@ -13,7 +13,7 @@ mod parallel;
 /// An `Iterator` over a [`BitSetLike`] structure.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BitIter<T> {
     pub(crate) set: T,
     pub(crate) masks: [usize; LAYERS],
@@ -134,6 +134,17 @@ mod tests {
         }
         for &i in &set.layer0 {
             assert_eq!(0, i);
+        }
+    }
+
+    #[test]
+    fn iterator_clone() {
+        let mut set = BitSet::new();
+        set.add(1);
+        set.add(3);
+        let iter = set.iter().skip(1);
+        for (a, b) in iter.clone().zip(iter) {
+            assert_eq!(a, b);
         }
     }
 }
