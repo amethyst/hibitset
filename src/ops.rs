@@ -93,7 +93,7 @@ where
 /// two original sets.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BitSetAnd<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetAnd<A, B> {
@@ -137,7 +137,7 @@ impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetAnd<A, B>
 /// two original sets.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BitSetOr<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetOr<A, B> {
@@ -180,7 +180,7 @@ impl<A: DrainableBitSet, B: DrainableBitSet> DrainableBitSet for BitSetOr<A, B> 
 /// Note: the implementation is sub-optimal because layers 1-3 are not active.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BitSetNot<A: BitSetLike>(pub A);
 
 impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
@@ -211,7 +211,7 @@ impl<A: BitSetLike> BitSetLike for BitSetNot<A> {
 /// two original sets.
 ///
 /// [`BitSetLike`]: ../trait.BitSetLike.html
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BitSetXor<A: BitSetLike, B: BitSetLike>(pub A, pub B);
 
 impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
@@ -259,7 +259,7 @@ impl<A: BitSetLike, B: BitSetLike> BitSetLike for BitSetXor<A, B> {
 
 /// `BitSetAll` is a bitset with all bits set. Essentially the same as
 /// `BitSetNot(BitSet::new())` but without any allocation.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BitSetAll;
 impl BitSetLike for BitSetAll {
     #[inline]
