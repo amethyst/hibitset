@@ -230,6 +230,153 @@ impl BitSet {
         self.layer2.clear();
         self.layer3 = 0;
     }
+
+    /// How many bits are in a `usize`.
+    ///
+    /// This value can be trivially determined. It is provided here as a constant for clarity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hibitset::BitSet;
+    /// assert_eq!(BitSet::BITS_PER_USIZE, std::mem::size_of::<usize>()*8);
+    /// ```
+    #[cfg(target_pointer_width = "32")]
+    pub const BITS_PER_USIZE: usize = 32;
+
+    /// How many bits are in a `usize`.
+    ///
+    /// This value can be trivially determined. It is provided here as a constant for clarity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hibitset::BitSet;
+    /// assert_eq!(BitSet::BITS_PER_USIZE, std::mem::size_of::<usize>()*8);
+    /// ```
+    #[cfg(target_pointer_width = "64")]
+    pub const BITS_PER_USIZE: usize = 64;
+
+    /// Returns the bottom layer of the bitset as a slice. Each bit in this slice refers to a single
+    /// `Index`.
+    ///
+    /// The slice's length will be at least the length needed to reflect all the `1`s in the bitset,
+    /// but is not otherwise guaranteed. Consider it to be an implementation detail.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hibitset::BitSet;
+    ///
+    /// let index: u32 = 12345;
+    ///
+    /// let mut bitset = BitSet::new();
+    /// bitset.add(index);
+    ///
+    /// // layer 0 is 1:1 with Indexes, so we expect that bit in the slice to be set
+    /// let slice = bitset.layer0_as_slice();
+    /// let bit_index = index as usize;
+    ///
+    /// // map that bit index to a usize in the slice and a bit within that usize
+    /// let slice_index = bit_index / BitSet::BITS_PER_USIZE;
+    /// let bit_at_index = bit_index % BitSet::BITS_PER_USIZE;
+    ///
+    /// assert_eq!(slice[slice_index], 1 << bit_at_index);
+    /// ```
+    pub fn layer0_as_slice(&self) -> &[usize] {
+        self.layer0.as_slice()
+    }
+
+    /// How many `Index`es are described by as single layer 1 bit, intended for use with
+    /// `BitSet::layer1_as_slice()`.
+    ///
+    /// `BitSet`s are defined in terms of `usize`s summarizing `usize`s, so this value can be
+    /// trivially determined. It is provided here as a constant for clarity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hibitset::BitSet;
+    /// assert_eq!(BitSet::LAYER1_GRANULARITY, BitSet::BITS_PER_USIZE);
+    /// ```
+    pub const LAYER1_GRANULARITY: usize = Self::BITS_PER_USIZE;
+
+    /// Returns the second layer of the bitset as a slice. Each bit in this slice summarizes a
+    /// corresponding `usize` from `layer0`. (If `usize` is 64 bits, bit 0 will be set if any
+    /// `Index`es 0-63 are set, bit 1 will be set if any `Index`es 64-127 are set, etc.)
+    /// `BitSet::LAYER1_GRANULARITY` reflects how many indexes are summarized per layer 1 bit.
+    ///
+    /// The slice's length is not guaranteed, except that it will be at least the length needed to
+    /// reflect all the `1`s in the bitset.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hibitset::BitSet;
+    ///
+    /// let index: u32 = 12345;
+    ///
+    /// let mut bitset = BitSet::new();
+    /// bitset.add(index);
+    ///
+    /// // layer 1 summarizes multiple indexes per bit, so divide appropriately
+    /// let slice = bitset.layer1_as_slice();
+    /// let bit_index = index as usize / BitSet::LAYER1_GRANULARITY;
+    ///
+    /// // map that bit index to a usize in the slice and a bit within that usize
+    /// let slice_index = bit_index / BitSet::BITS_PER_USIZE;
+    /// let bit_at_index = bit_index % BitSet::BITS_PER_USIZE;
+    ///
+    /// assert_eq!(slice[slice_index], 1 << bit_at_index);
+    /// ```
+    pub fn layer1_as_slice(&self) -> &[usize] {
+        self.layer1.as_slice()
+    }
+
+    /// How many `Index`es are described by as single layer 2 bit, intended for use with
+    /// `BitSet::layer2_as_slice()`.
+    ///
+    /// `BitSet`s are defined in terms of `usize`s summarizing `usize`s, so this value can be
+    /// trivially determined. It is provided here as a constant for clarity.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hibitset::BitSet;
+    /// assert_eq!(BitSet::LAYER2_GRANULARITY, BitSet::LAYER1_GRANULARITY * BitSet::BITS_PER_USIZE);
+    /// ```
+    pub const LAYER2_GRANULARITY: usize = Self::LAYER1_GRANULARITY * Self::BITS_PER_USIZE;
+
+    /// Returns the third layer of the bitset as a slice. Each bit in this slice summarizes a
+    /// corresponding `usize` from `layer1`. If `usize` is 64 bits, bit 0 will be set if any
+    /// `Index`es 0-4095 are set, bit 1 will be set if any `Index`es 4096-8191 are set, etc.
+    ///
+    /// The slice's length is not guaranteed, except that it will be at least the length needed to
+    /// reflect all the `1`s in the bitset.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use hibitset::BitSet;
+    ///
+    /// let index: u32 = 12345;
+    ///
+    /// let mut bitset = BitSet::new();
+    /// bitset.add(index);
+    ///
+    /// // layer 2 summarizes multiple indexes per bit, so divide appropriately
+    /// let slice = bitset.layer2_as_slice();
+    /// let bit_index = index as usize / BitSet::LAYER2_GRANULARITY;
+    ///
+    /// // map that bit index to a usize in the slice and a bit within that usize
+    /// let slice_index = bit_index / BitSet::BITS_PER_USIZE;
+    /// let bit_at_index = bit_index % BitSet::BITS_PER_USIZE;
+    ///
+    /// assert_eq!(slice[slice_index], 1 << bit_at_index);
+    /// ```
+    pub fn layer2_as_slice(&self) -> &[usize] {
+        self.layer2.as_slice()
+    }
 }
 
 /// A generic interface for [`BitSetLike`]-like types.
