@@ -33,7 +33,7 @@ Using `bincode` here is an example of how you can serialize/deserialize a `BitSe
 #[macro_use]
 extern crate serde_derive;
 
-use hibitset::{BitSet, BitSetAnd, BitSetLike, BitSetNot};
+use hibitset::{BitSet};
 use bincode;
 
 fn main() {
