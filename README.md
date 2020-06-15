@@ -57,7 +57,3 @@ This library is licensed under the Apache License 2.0,
 see [the LICENSE file][li] for more information.
 
 [li]: LICENSE
-
-```
-
-```
