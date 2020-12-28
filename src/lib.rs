@@ -20,7 +20,7 @@
 //! of Layer 0 is set, the bit in Layer 1 will be set.
 //!
 //! There are, in total, four layers. Layers 1 through 3 are each a
-//! a summary of the layer immediately below them.
+//! summary of the layer immediately below them.
 //!
 //! ```no_compile
 //! Example, with an imaginary 4-bit usize:
