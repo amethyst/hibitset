@@ -1,9 +1,9 @@
 use std::default::Default;
 use std::fmt::{Debug, Error as FormatError, Formatter};
 use std::iter::repeat;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-use atom::AtomSetOnce;
+use std::marker::PhantomData;
+use std::ptr;
+use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 
 use util::*;
 use {BitSetLike, DrainableBitSet};
@@ -169,7 +169,7 @@ impl BitSetLike for AtomicBitSet {
         self.layer1[o1]
             .atom
             .get()
-            .map(|l0| l0[o0].load(Ordering::Relaxed))
+            .map(|layer0| layer0[o0].load(Ordering::Relaxed))
             .unwrap_or(0)
     }
     #[inline]
@@ -201,27 +201,93 @@ impl Default for AtomicBitSet {
     }
 }
 
+struct OnceAtom {
+    inner: AtomicPtr<[AtomicUsize; 1 << BITS]>,
+    marker: PhantomData<Option<Box<[AtomicUsize; 1 << BITS]>>>,
+}
+
+impl Drop for OnceAtom {
+    fn drop(&mut self) {
+        let ptr = *self.inner.get_mut();
+        if !ptr.is_null() {
+            // SAFETY: If the pointer is not null, we created it from
+            // `Box::into_raw` in `Self::atom_get_or_init`.
+            unsafe { Box::from_raw(ptr) };
+        }
+    }
+}
+
+impl OnceAtom {
+    fn new() -> Self {
+        Self {
+            inner: AtomicPtr::new(ptr::null_mut()),
+            marker: PhantomData,
+        }
+    }
+
+    fn get_or_init(&self) -> &[AtomicUsize; 1 << BITS] {
+        let current_ptr = self.inner.load(Ordering::Acquire);
+        let ptr = if current_ptr.is_null() {
+            const ZERO: AtomicUsize = AtomicUsize::new(0);
+            let new_ptr = Box::into_raw(Box::new([ZERO; 1 << BITS]));
+            if let Err(existing_ptr) = self.inner.compare_exchange(
+                ptr::null_mut(),
+                new_ptr,
+                // On success, Release matches any Acquire loads of the non-null
+                // pointer, to ensure the new box is visible to other threads.
+                Ordering::Release,
+                Ordering::Acquire,
+            ) {
+                // SAFETY: We obtained this pointer from `Box::into_raw` above
+                // and failed to publish it to the `AtomicPtr`.
+                unsafe { Box::from_raw(new_ptr) };
+                existing_ptr
+            } else {
+                new_ptr
+            }
+        } else {
+            current_ptr
+        };
+
+        // SAFETY: We checked that this pointer is not null (either by
+        // `.is_null()` check, `compare_exhange`, or from `Box::into_raw`). We
+        // created from `Box::into_raw` (at some point) and we only use it to
+        // create immutable references (unless we have exclusive access to self)
+        unsafe { &*ptr }
+    }
+
+    fn get(&self) -> Option<&[AtomicUsize; 1 << BITS]> {
+        let ptr = self.inner.load(Ordering::Acquire);
+        // SAFETY: If it is not null, we created this pointer from
+        // `Box::into_raw` and only use it to create immutable references
+        // (unless we have exclusive access to self)
+        unsafe { ptr.as_ref() }
+    }
+
+    fn get_mut(&mut self) -> Option<&mut [AtomicUsize; 1 << BITS]> {
+        let ptr = self.inner.get_mut();
+        // SAFETY: If this is not null, we created this pointer from
+        // `Box::into_raw` and we have an exclusive borrow of self.
+        unsafe { ptr.as_mut() }
+    }
+}
+
 struct AtomicBlock {
     mask: AtomicUsize,
-    atom: AtomSetOnce<Box<[AtomicUsize; 1 << BITS]>>,
+    atom: OnceAtom,
 }
 
 impl AtomicBlock {
     fn new() -> AtomicBlock {
         AtomicBlock {
             mask: AtomicUsize::new(0),
-            atom: AtomSetOnce::empty(),
+            atom: OnceAtom::new(),
         }
     }
 
     fn add(&self, id: Index) -> bool {
-        if self.atom.is_none() {
-            let v = Box::new(unsafe { ::std::mem::zeroed() });
-            self.atom.set_if_none(v);
-        }
-
         let (i, m) = (id.row(SHIFT1), id.mask(SHIFT0));
-        let old = self.atom.get().unwrap()[i].fetch_or(m, Ordering::Relaxed);
+        let old = self.atom.get_or_init()[i].fetch_or(m, Ordering::Relaxed);
         self.mask.fetch_or(id.mask(SHIFT1), Ordering::Relaxed);
         old & m != 0
     }
@@ -229,30 +295,32 @@ impl AtomicBlock {
     fn contains(&self, id: Index) -> bool {
         self.atom
             .get()
-            .map(|l0| l0[id.row(SHIFT1)].load(Ordering::Relaxed) & id.mask(SHIFT0) != 0)
+            .map(|layer0| layer0[id.row(SHIFT1)].load(Ordering::Relaxed) & id.mask(SHIFT0) != 0)
             .unwrap_or(false)
     }
 
     fn remove(&mut self, id: Index) -> bool {
-        if let Some(l0) = self.atom.get_mut() {
+        if let Some(layer0) = self.atom.get_mut() {
             let (i, m) = (id.row(SHIFT1), !id.mask(SHIFT0));
-            let v = l0[i].load(Ordering::Relaxed);
-            l0[i].store(v & m, Ordering::Relaxed);
-            if v & m == 0 {
-                let v = self.mask.load(Ordering::Relaxed) & !id.mask(SHIFT1);
-                self.mask.store(v, Ordering::Relaxed);
+            let v = layer0[i].get_mut();
+            let was_set = *v & id.mask(SHIFT0) == id.mask(SHIFT0);
+            *v = *v & m;
+            if *v == 0 {
+                // no other bits are set
+                // so unset bit in the next level up
+                *self.mask.get_mut() &= !id.mask(SHIFT1);
             }
-            v & id.mask(SHIFT0) == id.mask(SHIFT0)
+            was_set
         } else {
             false
         }
     }
 
     fn clear(&mut self) {
-        self.mask.store(0, Ordering::Relaxed);
-        self.atom.get().map(|l0| {
-            for l in &l0[..] {
-                l.store(0, Ordering::Relaxed);
+        *self.mask.get_mut() = 0;
+        self.atom.get_mut().map(|layer0| {
+            for l in layer0 {
+                *l.get_mut() = 0;
             }
         });
     }
@@ -415,5 +483,4 @@ mod atomic_set_test {
         set.clear();
         assert_eq!((&set).iter().count(), 0);
     }
-
 }

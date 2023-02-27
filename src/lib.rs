@@ -45,7 +45,6 @@
 
 #![deny(missing_docs)]
 
-extern crate atom;
 #[cfg(test)]
 extern crate rand;
 #[cfg(feature = "parallel")]
