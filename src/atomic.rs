@@ -483,4 +483,10 @@ mod atomic_set_test {
         set.clear();
         assert_eq!((&set).iter().count(), 0);
     }
+
+    #[test]
+    fn debug() {
+        let bitset = AtomicBitSet::default();
+        println!("debug = {:?}", bitset);
+    }
 }
