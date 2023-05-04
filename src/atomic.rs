@@ -26,7 +26,7 @@ use {BitSetLike, DrainableBitSet};
 /// clearing of bits.
 ///
 /// [`BitSet`]: ../struct.BitSet.html
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct AtomicBitSet {
     layer3: AtomicUsize,
     layer2: Vec<AtomicUsize>,
@@ -201,6 +201,26 @@ impl Default for AtomicBitSet {
     }
 }
 
+impl Debug for AtomicBitSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct("AtomicBitSet");
+
+        s.field(
+            "layer1",
+            &self
+                .layer1
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| !v.is_empty())
+                .collect::<Vec<(usize, &AtomicBlock)>>(),
+        );
+        s.field("layer2", &self.layer2);
+        s.field("layer3", &self.layer3);
+
+        s.finish()
+    }
+}
+
 struct OnceAtom {
     inner: AtomicPtr<[AtomicUsize; 1 << BITS]>,
     marker: PhantomData<Option<Box<[AtomicUsize; 1 << BITS]>>>,
@@ -285,6 +305,11 @@ impl AtomicBlock {
         }
     }
 
+    /// Returns true if the block has an empty mask
+    fn is_empty(&self) -> bool {
+        self.mask.fetch_or(0, Ordering::Relaxed) == 0
+    }
+
     fn add(&self, id: Index) -> bool {
         let (i, m) = (id.row(SHIFT1), id.mask(SHIFT0));
         let old = self.atom.get_or_init()[i].fetch_or(m, Ordering::Relaxed);
@@ -328,10 +353,12 @@ impl AtomicBlock {
 
 impl Debug for AtomicBlock {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
-        f.debug_struct("AtomicBlock")
-            .field("mask", &self.mask)
-            .field("atom", &self.atom.get().unwrap().iter())
-            .finish()
+        let mut s = f.debug_struct("AtomicBlock");
+        s.field("mask", &self.mask);
+        if let Some(atom) = self.atom.get() {
+            s.field("atom", &atom.iter());
+        }
+        s.finish()
     }
 }
 
