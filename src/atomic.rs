@@ -15,14 +15,14 @@ use {BitSetLike, DrainableBitSet};
 /// without unique ownership (given that the set is big enough).
 /// Removing elements does require unique ownership as an effect
 /// of the hierarchy it holds. Worst case multiple writers set the
-/// same bit twice (but only is told they set it).
+/// same bit twice (but only one is told they set it).
 ///
 /// It is possible to atomically remove from the set, but not at the
 /// same time as atomically adding. This is because there is no way
 /// to know if layer 1-3 would be left in a consistent state if they are
 /// being cleared and set at the same time.
 ///
-/// `AtromicBitSet` resolves this race by disallowing atomic
+/// `AtomicBitSet` resolves this race by disallowing atomic
 /// clearing of bits.
 ///
 /// [`BitSet`]: ../struct.BitSet.html
@@ -203,21 +203,8 @@ impl Default for AtomicBitSet {
 
 impl Debug for AtomicBitSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut s = f.debug_struct("AtomicBitSet");
-
-        s.field(
-            "layer1",
-            &self
-                .layer1
-                .iter()
-                .enumerate()
-                .filter(|(_, v)| !v.is_empty())
-                .collect::<Vec<(usize, &AtomicBlock)>>(),
-        );
-        s.field("layer2", &self.layer2);
-        s.field("layer3", &self.layer3);
-
-        s.finish()
+        write!(f, "AtomicBitSet")?;
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 
@@ -305,11 +292,6 @@ impl AtomicBlock {
         }
     }
 
-    /// Returns true if the block has an empty mask
-    fn is_empty(&self) -> bool {
-        self.mask.fetch_or(0, Ordering::Relaxed) == 0
-    }
-
     fn add(&self, id: Index) -> bool {
         let (i, m) = (id.row(SHIFT1), id.mask(SHIFT0));
         let old = self.atom.get_or_init()[i].fetch_or(m, Ordering::Relaxed);
@@ -356,7 +338,17 @@ impl Debug for AtomicBlock {
         let mut s = f.debug_struct("AtomicBlock");
         s.field("mask", &self.mask);
         if let Some(atom) = self.atom.get() {
-            s.field("atom", &atom.iter());
+            s.field(
+                "atom",
+                &atom
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, v)| match v.fetch_or(0, Ordering::Relaxed) {
+                        0 => None,
+                        x => Some((idx, x)),
+                    })
+                    .collect::<Vec<(usize, usize)>>(),
+            );
         }
         s.finish()
     }
@@ -513,7 +505,20 @@ mod atomic_set_test {
 
     #[test]
     fn debug() {
-        let bitset = AtomicBitSet::default();
+        let mut bitset = AtomicBitSet::default();
+        println!("debug = {:?}", bitset);
+
+        bitset.add(5);
+        bitset.add(127194);
+
+        println!("debug = {:?}", bitset);
+
+        bitset.remove(127194);
+
+        println!("debug = {:?}", bitset);
+
+        bitset.remove(5);
+
         println!("debug = {:?}", bitset);
     }
 }
