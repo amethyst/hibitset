@@ -212,7 +212,7 @@ impl Drop for OnceAtom {
         if !ptr.is_null() {
             // SAFETY: If the pointer is not null, we created it from
             // `Box::into_raw` in `Self::atom_get_or_init`.
-            unsafe { Box::from_raw(ptr) };
+            drop(unsafe { Box::from_raw(ptr) });
         }
     }
 }
@@ -240,7 +240,7 @@ impl OnceAtom {
             ) {
                 // SAFETY: We obtained this pointer from `Box::into_raw` above
                 // and failed to publish it to the `AtomicPtr`.
-                unsafe { Box::from_raw(new_ptr) };
+                drop(unsafe { Box::from_raw(new_ptr) });
                 existing_ptr
             } else {
                 new_ptr
