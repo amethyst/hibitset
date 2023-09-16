@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+## 0.6.4 (2023-07-16)
+
+* Fix UB reported by Miri and remove unmaintained `atom` dependency which has open soundness
+  issues. ([#61])
+
+[#61]: https://github.com/amethyst/hibitset/pull/61
+
 ## 0.6.3 (2020-02-17)
 
 * `BitSetAnd`, `BitSetOr`, `BitSetNot`, `BitSetXor`, `BitSetAll` now implement `Clone`. ([#52])
