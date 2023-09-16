@@ -1,0 +1,69 @@
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - "**"
+
+name: CI
+
+jobs:
+  build_and_test:
+    name: Build and Test (Linux)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - nightly
+          - stable
+
+    timeout-minutes: 10
+
+    env:
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup rust toolchain (stable)
+        if: matrix.rust == 'stable'
+        run: |
+          rustup update
+          rustup override set stable
+
+      - name: Setup rust toolchain (nightly)
+        if: matrix.rust == 'nightly'
+        run: |
+          rustup toolchain install nightly
+          rustup override set nightly
+
+      - name: Build
+        run: cargo build --verbose
+      - name: Doc
+        run: cargo doc --verbose
+      - name: Test
+        run: cargo test --verbose
+      - name: Build (no-default-features)
+        run: cargo build --verbose --no-default-features
+      - name: Test (no-default-features)
+        run: cargo test --verbose --no-default-features
+
+      - name: Bench
+        if: matrix.rust == 'nightly'
+        run: cargo bench --verbose --no-default-features
+
+
+# TODO: some tests take a while
+
+#  miri:
+#    name: "Miri"
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Install Miri
+#        run: |
+#          rustup toolchain install nightly --component miri
+#          rustup override set nightly
+#          cargo miri setup
+#      - name: Test with Miri
+#        run: cargo miri test
