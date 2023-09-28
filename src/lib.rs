@@ -50,6 +50,11 @@ extern crate rand;
 #[cfg(feature = "parallel")]
 extern crate rayon;
 
+#[cfg(feature = "serde")]
+extern crate serde;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
 mod atomic;
 mod iter;
 mod ops;
@@ -69,6 +74,7 @@ use util::*;
 /// Note, a `BitSet` is limited by design to only `usize**4` indices.
 /// Adding beyond this limit will cause the `BitSet` to panic.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BitSet {
     layer3: usize,
     layer2: Vec<usize>,
@@ -866,4 +872,5 @@ mod test_parallel {
             );
         }
     }
+
 }
