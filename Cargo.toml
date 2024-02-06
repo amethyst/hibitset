@@ -15,6 +15,7 @@ optional = true
 
 [dev-dependencies]
 rand = "0.7"
+typed_test_gen = "0.1"
 
 [features]
 default = ["parallel"]

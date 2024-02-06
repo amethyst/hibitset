@@ -1,8 +1,9 @@
 use rayon::iter::plumbing::{bridge_unindexed, Folder, UnindexedConsumer, UnindexedProducer};
 use rayon::iter::ParallelIterator;
 
-use iter::{BitIter, BitSetLike, Index, BITS, LAYERS};
+use iter::{BitIter, Index, LAYERS};
 use util::average_ones;
+use {BitSetLike, UnsignedInteger};
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
@@ -57,6 +58,7 @@ impl<T> BitParIter<T> {
 impl<T> ParallelIterator for BitParIter<T>
 where
     T: BitSetLike + Send + Sync,
+    <T as BitSetLike>::Underlying: Send + Sync,
 {
     type Item = Index;
 
@@ -72,11 +74,12 @@ where
 ///
 /// Usually used internally by `BitParIter`.
 #[derive(Debug)]
-pub struct BitProducer<'a, T: 'a + Send + Sync>(pub BitIter<&'a T>, pub u8);
+pub struct BitProducer<'a, T: 'a + BitSetLike>(pub BitIter<&'a T>, pub u8);
 
 impl<'a, T: 'a + Send + Sync> UnindexedProducer for BitProducer<'a, T>
 where
     T: BitSetLike,
+    <T as BitSetLike>::Underlying: Send + Sync,
 {
     type Item = Index;
 
@@ -112,7 +115,7 @@ where
         let splits = self.1;
         let other = {
             let mut handle_level = |level: usize| {
-                if self.0.masks[level] == 0 {
+                if self.0.masks[level] == T::Underlying::ZERO {
                     // Skip the empty layers
                     None
                 } else {
@@ -121,29 +124,35 @@ where
                     let first_bit = self.0.masks[level].trailing_zeros();
                     average_ones(self.0.masks[level])
                         .and_then(|average_bit| {
-                            let mask = (1 << average_bit) - 1;
+                            let mask = (T::Underlying::ONE << average_bit) - T::Underlying::ONE;
                             let mut other = BitProducer(
-                                BitIter::new(self.0.set, [0; LAYERS], [0; LAYERS - 1]),
+                                BitIter::new(
+                                    self.0.set,
+                                    [T::Underlying::ZERO; LAYERS],
+                                    [0; LAYERS - 1],
+                                ),
                                 splits,
                             );
                             // The `other` is the more significant half of the mask
                             other.0.masks[level] = self.0.masks[level] & !mask;
-                            other.0.prefix[level - 1] = (level_prefix | average_bit as u32) << BITS;
+                            other.0.prefix[level - 1] =
+                                (level_prefix | average_bit.to_u32()) << T::Underlying::LOG_BITS;
                             // The upper portion of the prefix is maintained, because the `other`
                             // will iterate the same subtree as the `self` does
                             other.0.prefix[level..].copy_from_slice(&self.0.prefix[level..]);
                             // And the `self` is the less significant one
                             self.0.masks[level] &= mask;
-                            self.0.prefix[level - 1] = (level_prefix | first_bit) << BITS;
+                            self.0.prefix[level - 1] =
+                                (level_prefix | first_bit) << T::Underlying::LOG_BITS;
                             Some(other)
                         })
                         .or_else(|| {
                             // Because there is only one bit left we descend to it
                             let idx = level_prefix as usize | first_bit as usize;
-                            self.0.prefix[level - 1] = (idx as u32) << BITS;
+                            self.0.prefix[level - 1] = (idx as u32) << T::Underlying::LOG_BITS;
                             // The level that is descended from doesn't have anything
                             // interesting so it can be skipped in the future.
-                            self.0.masks[level] = 0;
+                            self.0.masks[level] = T::Underlying::ZERO;
                             self.0.masks[level - 1] = self.0.set.get_from_layer(level - 1, idx);
                             None
                         })
@@ -169,16 +178,18 @@ where
 
 #[cfg(test)]
 mod test_bit_producer {
+    extern crate typed_test_gen;
+    use self::typed_test_gen::test_with;
     use rayon::iter::plumbing::UnindexedProducer;
 
     use super::BitProducer;
-    use iter::BitSetLike;
-    use util::BITS;
+    use {BitSetLike, GenericBitSet, UnsignedInteger};
 
-    fn test_splitting(split_levels: u8) {
-        fn visit<T>(mut us: BitProducer<T>, d: usize, i: usize, mut trail: String, c: &mut usize)
+    fn test_splitting<T: UnsignedInteger + Send + Sync>(split_levels: u8) {
+        fn visit<T, S>(mut us: BitProducer<S>, d: usize, i: usize, mut trail: String, c: &mut usize)
         where
-            T: Send + Sync + BitSetLike,
+            T: Send + Sync + UnsignedInteger,
+            S: Send + Sync + BitSetLike<Underlying = T>,
         {
             if d == 0 {
                 assert!(us.split().1.is_none(), "{}", trail);
@@ -193,14 +204,14 @@ mod test_bit_producer {
                     visit(them, d, i - j, trail, c);
                 }
                 trail.push_str("u");
-                visit(us, d - 1, BITS, trail, c);
+                visit(us, d - 1, T::LOG_BITS, trail, c);
             }
         }
 
-        let usize_bits = ::std::mem::size_of::<usize>() * 8;
+        let uint_bits = ::std::mem::size_of::<T>() * 8;
 
-        let mut c = ::BitSet::new();
-        for i in 0..(usize_bits.pow(3) * 2) {
+        let mut c = GenericBitSet::<T>::new();
+        for i in 0..(uint_bits.pow(3) * 2) {
             assert!(!c.add(i as u32));
         }
 
@@ -211,32 +222,32 @@ mod test_bit_producer {
         visit(
             us,
             split_levels as usize - 1,
-            BITS,
+            T::LOG_BITS,
             "u".to_owned(),
             &mut count,
         );
         visit(
             them.expect("Splitting top level"),
             split_levels as usize - 1,
-            BITS,
+            T::LOG_BITS,
             "t".to_owned(),
             &mut count,
         );
-        assert_eq!(usize_bits.pow(split_levels as u32 - 1) * 2, count);
+        assert_eq!(uint_bits.pow(split_levels as u32 - 1) * 2, count);
     }
 
-    #[test]
-    fn max_3_splitting_of_two_top_bits() {
-        test_splitting(3);
+    #[test_with(u32, u64, usize)]
+    fn max_3_splitting_of_two_top_bits<T: UnsignedInteger + Send + Sync>() {
+        test_splitting::<T>(3);
     }
 
-    #[test]
-    fn max_2_splitting_of_two_top_bits() {
-        test_splitting(2);
+    #[test_with(u32, u64, usize)]
+    fn max_2_splitting_of_two_top_bits<T: UnsignedInteger + Send + Sync>() {
+        test_splitting::<T>(2);
     }
 
-    #[test]
-    fn max_1_splitting_of_two_top_bits() {
-        test_splitting(1);
+    #[test_with(u32, u64, usize)]
+    fn max_1_splitting_of_two_top_bits<T: UnsignedInteger + Send + Sync>() {
+        test_splitting::<T>(1);
     }
 }

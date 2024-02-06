@@ -8,6 +8,12 @@ use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 use util::*;
 use {BitSetLike, DrainableBitSet};
 
+const SHIFT0: usize = usize::SHIFT0;
+const SHIFT1: usize = usize::SHIFT1;
+const SHIFT2: usize = usize::SHIFT2;
+const SHIFT3: usize = usize::SHIFT3;
+const LOG_BITS: usize = <usize as UnsignedInteger>::LOG_BITS as usize;
+
 /// This is similar to a [`BitSet`] but allows setting of value
 /// without unique ownership of the structure
 ///
@@ -46,7 +52,7 @@ impl AtomicBitSet {
     /// this will panic if the Index is out of range.
     #[inline]
     pub fn add_atomic(&self, id: Index) -> bool {
-        let (_, p1, p2) = offsets(id);
+        let (_, p1, p2) = offsets::<usize>(id);
 
         // While it is tempting to check of the bit was set and exit here if it
         // was, this can result in a data race. If this thread and another
@@ -65,14 +71,19 @@ impl AtomicBitSet {
     pub fn add(&mut self, id: Index) -> bool {
         use std::sync::atomic::Ordering::Relaxed;
 
-        let (_, p1, p2) = offsets(id);
+        let (_, p1, p2) = offsets::<usize>(id);
         if self.layer1[p1].add(id) {
             return true;
         }
 
-        self.layer2[p2].store(self.layer2[p2].load(Relaxed) | id.mask(SHIFT2), Relaxed);
-        self.layer3
-            .store(self.layer3.load(Relaxed) | id.mask(SHIFT3), Relaxed);
+        self.layer2[p2].store(
+            self.layer2[p2].load(Relaxed) | id.mask::<usize>(SHIFT2),
+            Relaxed,
+        );
+        self.layer3.store(
+            self.layer3.load(Relaxed) | id.mask::<usize>(SHIFT3),
+            Relaxed,
+        );
         false
     }
 
@@ -82,7 +93,7 @@ impl AtomicBitSet {
     #[inline]
     pub fn remove(&mut self, id: Index) -> bool {
         use std::sync::atomic::Ordering::Relaxed;
-        let (_, p1, p2) = offsets(id);
+        let (_, p1, p2) = offsets::<usize>(id);
 
         // if the bitmask was set we need to clear
         // its bit from layer0 to 3. the layers above only
@@ -98,13 +109,13 @@ impl AtomicBitSet {
             return true;
         }
 
-        let v = self.layer2[p2].load(Relaxed) & !id.mask(SHIFT2);
+        let v = self.layer2[p2].load(Relaxed) & !id.mask::<usize>(SHIFT2);
         self.layer2[p2].store(v, Relaxed);
         if v != 0 {
             return true;
         }
 
-        let v = self.layer3.load(Relaxed) & !id.mask(SHIFT3);
+        let v = self.layer3.load(Relaxed) & !id.mask::<usize>(SHIFT3);
         self.layer3.store(v, Relaxed);
         return true;
     }
@@ -141,7 +152,7 @@ impl AtomicBitSet {
             if m3 != 0 {
                 let bit = m3.trailing_zeros() as usize;
                 m3 &= !(1 << bit);
-                offset = bit << BITS;
+                offset = bit << LOG_BITS;
                 m2 = self.layer2[bit].swap(0, Ordering::Relaxed);
                 continue;
             }
@@ -151,6 +162,8 @@ impl AtomicBitSet {
 }
 
 impl BitSetLike for AtomicBitSet {
+    type Underlying = usize;
+
     #[inline]
     fn layer3(&self) -> usize {
         self.layer3.load(Ordering::Relaxed)
@@ -165,7 +178,7 @@ impl BitSetLike for AtomicBitSet {
     }
     #[inline]
     fn layer0(&self, i: usize) -> usize {
-        let (o1, o0) = (i >> BITS, i & ((1 << BITS) - 1));
+        let (o1, o0) = (i >> LOG_BITS, i & ((1 << LOG_BITS) - 1));
         self.layer1[o1]
             .atom
             .get()
@@ -191,19 +204,19 @@ impl Default for AtomicBitSet {
             layer3: Default::default(),
             layer2: repeat(0)
                 .map(|_| AtomicUsize::new(0))
-                .take(1 << BITS)
+                .take(1 << LOG_BITS)
                 .collect(),
             layer1: repeat(0)
                 .map(|_| AtomicBlock::new())
-                .take(1 << (2 * BITS))
+                .take(1 << (2 * LOG_BITS))
                 .collect(),
         }
     }
 }
 
 struct OnceAtom {
-    inner: AtomicPtr<[AtomicUsize; 1 << BITS]>,
-    marker: PhantomData<Option<Box<[AtomicUsize; 1 << BITS]>>>,
+    inner: AtomicPtr<[AtomicUsize; 1 << LOG_BITS]>,
+    marker: PhantomData<Option<Box<[AtomicUsize; 1 << LOG_BITS]>>>,
 }
 
 impl Drop for OnceAtom {
@@ -225,11 +238,11 @@ impl OnceAtom {
         }
     }
 
-    fn get_or_init(&self) -> &[AtomicUsize; 1 << BITS] {
+    fn get_or_init(&self) -> &[AtomicUsize; 1 << LOG_BITS] {
         let current_ptr = self.inner.load(Ordering::Acquire);
         let ptr = if current_ptr.is_null() {
             const ZERO: AtomicUsize = AtomicUsize::new(0);
-            let new_ptr = Box::into_raw(Box::new([ZERO; 1 << BITS]));
+            let new_ptr = Box::into_raw(Box::new([ZERO; 1 << LOG_BITS]));
             if let Err(existing_ptr) = self.inner.compare_exchange(
                 ptr::null_mut(),
                 new_ptr,
@@ -256,7 +269,7 @@ impl OnceAtom {
         unsafe { &*ptr }
     }
 
-    fn get(&self) -> Option<&[AtomicUsize; 1 << BITS]> {
+    fn get(&self) -> Option<&[AtomicUsize; 1 << LOG_BITS]> {
         let ptr = self.inner.load(Ordering::Acquire);
         // SAFETY: If it is not null, we created this pointer from
         // `Box::into_raw` and only use it to create immutable references
@@ -264,7 +277,7 @@ impl OnceAtom {
         unsafe { ptr.as_ref() }
     }
 
-    fn get_mut(&mut self) -> Option<&mut [AtomicUsize; 1 << BITS]> {
+    fn get_mut(&mut self) -> Option<&mut [AtomicUsize; 1 << LOG_BITS]> {
         let ptr = self.inner.get_mut();
         // SAFETY: If this is not null, we created this pointer from
         // `Box::into_raw` and we have an exclusive borrow of self.
@@ -286,7 +299,7 @@ impl AtomicBlock {
     }
 
     fn add(&self, id: Index) -> bool {
-        let (i, m) = (id.row(SHIFT1), id.mask(SHIFT0));
+        let (i, m) = (id.row::<usize>(SHIFT1), id.mask::<usize>(SHIFT0));
         let old = self.atom.get_or_init()[i].fetch_or(m, Ordering::Relaxed);
         self.mask.fetch_or(id.mask(SHIFT1), Ordering::Relaxed);
         old & m != 0
@@ -295,20 +308,23 @@ impl AtomicBlock {
     fn contains(&self, id: Index) -> bool {
         self.atom
             .get()
-            .map(|layer0| layer0[id.row(SHIFT1)].load(Ordering::Relaxed) & id.mask(SHIFT0) != 0)
+            .map(|layer0| {
+                layer0[id.row::<usize>(SHIFT1)].load(Ordering::Relaxed) & id.mask::<usize>(SHIFT0)
+                    != 0
+            })
             .unwrap_or(false)
     }
 
     fn remove(&mut self, id: Index) -> bool {
         if let Some(layer0) = self.atom.get_mut() {
-            let (i, m) = (id.row(SHIFT1), !id.mask(SHIFT0));
+            let (i, m) = (id.row::<usize>(SHIFT1), !id.mask::<usize>(SHIFT0));
             let v = layer0[i].get_mut();
-            let was_set = *v & id.mask(SHIFT0) == id.mask(SHIFT0);
+            let was_set = *v & id.mask::<usize>(SHIFT0) == id.mask(SHIFT0);
             *v = *v & m;
             if *v == 0 {
                 // no other bits are set
                 // so unset bit in the next level up
-                *self.mask.get_mut() &= !id.mask(SHIFT1);
+                *self.mask.get_mut() &= !id.mask::<usize>(SHIFT1);
             }
             was_set
         } else {
