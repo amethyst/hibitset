@@ -21,18 +21,18 @@ const LOG_BITS: usize = <usize as UnsignedInteger>::LOG_BITS as usize;
 /// without unique ownership (given that the set is big enough).
 /// Removing elements does require unique ownership as an effect
 /// of the hierarchy it holds. Worst case multiple writers set the
-/// same bit twice (but only is told they set it).
+/// same bit twice (but only one is told they set it).
 ///
 /// It is possible to atomically remove from the set, but not at the
 /// same time as atomically adding. This is because there is no way
 /// to know if layer 1-3 would be left in a consistent state if they are
 /// being cleared and set at the same time.
 ///
-/// `AtromicBitSet` resolves this race by disallowing atomic
+/// `AtomicBitSet` resolves this race by disallowing atomic
 /// clearing of bits.
 ///
 /// [`BitSet`]: ../struct.BitSet.html
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct AtomicBitSet {
     layer3: AtomicUsize,
     layer2: Vec<AtomicUsize>,
@@ -214,6 +214,13 @@ impl Default for AtomicBitSet {
     }
 }
 
+impl Debug for AtomicBitSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AtomicBitSet")?;
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
 struct OnceAtom {
     inner: AtomicPtr<[AtomicUsize; 1 << LOG_BITS]>,
     marker: PhantomData<Option<Box<[AtomicUsize; 1 << LOG_BITS]>>>,
@@ -344,10 +351,22 @@ impl AtomicBlock {
 
 impl Debug for AtomicBlock {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
-        f.debug_struct("AtomicBlock")
-            .field("mask", &self.mask)
-            .field("atom", &self.atom.get().unwrap().iter())
-            .finish()
+        let mut s = f.debug_struct("AtomicBlock");
+        s.field("mask", &self.mask);
+        if let Some(atom) = self.atom.get() {
+            s.field(
+                "atom",
+                &atom
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, v)| match v.fetch_or(0, Ordering::Relaxed) {
+                        0 => None,
+                        x => Some((idx, x)),
+                    })
+                    .collect::<Vec<(usize, usize)>>(),
+            );
+        }
+        s.finish()
     }
 }
 
@@ -498,5 +517,24 @@ mod atomic_set_test {
         assert_eq!((&set).iter().count(), 10);
         set.clear();
         assert_eq!((&set).iter().count(), 0);
+    }
+
+    #[test]
+    fn debug() {
+        let mut bitset = AtomicBitSet::default();
+        println!("debug = {:?}", bitset);
+
+        bitset.add(5);
+        bitset.add(127194);
+
+        println!("debug = {:?}", bitset);
+
+        bitset.remove(127194);
+
+        println!("debug = {:?}", bitset);
+
+        bitset.remove(5);
+
+        println!("debug = {:?}", bitset);
     }
 }
